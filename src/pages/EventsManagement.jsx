@@ -24,6 +24,7 @@ import { useToast } from '../context/ToastContext';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
 import ScannableBarcode from '../components/ScannableBarcode';
+import { toDatetimeLocalIST, istDatetimeLocalToUTC, formatDateIST } from '../utils/dateUtil';
 
 /**
  * 38mm × 50mm Live Thermal Sticker Preview Component
@@ -117,10 +118,10 @@ export default function EventsManagement() {
     setEventCode('');
     setDescription('');
     setVenue('');
-    setStartDate(new Date().toISOString().slice(0, 16));
-    const nextWeek = new Date();
-    nextWeek.setDate(nextWeek.getDate() + 3);
-    setEndDate(nextWeek.toISOString().slice(0, 16));
+    const now = new Date();
+    setStartDate(toDatetimeLocalIST(now));
+    const nextWeek = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+    setEndDate(toDatetimeLocalIST(nextWeek));
     setStatus('active');
     setBarcodeType('QR_CODE');
     setStickerWidthMm(38);
@@ -134,8 +135,8 @@ export default function EventsManagement() {
     setEventCode(ev.event_code);
     setDescription(ev.description || '');
     setVenue(ev.venue || '');
-    setStartDate(new Date(ev.event_start_date).toISOString().slice(0, 16));
-    setEndDate(new Date(ev.event_end_date).toISOString().slice(0, 16));
+    setStartDate(toDatetimeLocalIST(ev.event_start_date));
+    setEndDate(toDatetimeLocalIST(ev.event_end_date));
     setStatus(ev.status);
     setBarcodeType(ev.barcode_type || 'QR_CODE');
     setStickerWidthMm(ev.sticker_width_mm || 38);
@@ -152,8 +153,8 @@ export default function EventsManagement() {
         eventCode,
         description,
         venue,
-        startDate,
-        endDate,
+        startDate: istDatetimeLocalToUTC(startDate),
+        endDate: istDatetimeLocalToUTC(endDate),
         status,
         barcodeType,
         stickerWidthMm,
@@ -182,8 +183,8 @@ export default function EventsManagement() {
         eventCode,
         description,
         venue,
-        startDate,
-        endDate,
+        startDate: istDatetimeLocalToUTC(startDate),
+        endDate: istDatetimeLocalToUTC(endDate),
         status,
         barcodeType,
         stickerWidthMm,

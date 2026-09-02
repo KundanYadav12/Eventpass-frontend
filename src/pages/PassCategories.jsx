@@ -19,7 +19,13 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
-import { formatDateIST, formatBehaviorSummary, formatClockTime } from '../utils/dateUtil';
+import {
+  formatDateIST,
+  formatBehaviorSummary,
+  formatClockTime,
+  toDatetimeLocalIST,
+  istDatetimeLocalToUTC
+} from '../utils/dateUtil';
 
 export default function PassCategories() {
   const { user } = useAuth();
@@ -76,8 +82,8 @@ export default function PassCategories() {
     setCode('');
     setCategoryPrefix('');
     setDescription('');
-    const defaultStart = selectedEvent ? new Date(selectedEvent.event_start_date).toISOString().slice(0, 16) : '2026-10-02T00:00';
-    const defaultEnd = selectedEvent ? new Date(selectedEvent.event_end_date).toISOString().slice(0, 16) : '2026-10-02T23:59';
+    const defaultStart = selectedEvent?.event_start_date ? toDatetimeLocalIST(selectedEvent.event_start_date) : '2026-10-02T00:00';
+    const defaultEnd = selectedEvent?.event_end_date ? toDatetimeLocalIST(selectedEvent.event_end_date) : '2026-10-02T23:59';
     setValidFrom(defaultStart);
     setValidUntil(defaultEnd);
     setTotalQuantity(1000);
@@ -97,8 +103,8 @@ export default function PassCategories() {
     setCode(cat.code);
     setCategoryPrefix(cat.category_prefix || '');
     setDescription(cat.description || '');
-    setValidFrom(cat.valid_from ? new Date(cat.valid_from).toISOString().slice(0, 16) : '');
-    setValidUntil(cat.valid_until ? new Date(cat.valid_until).toISOString().slice(0, 16) : '');
+    setValidFrom(toDatetimeLocalIST(cat.valid_from));
+    setValidUntil(toDatetimeLocalIST(cat.valid_until));
     setTotalQuantity(cat.total_quantity);
     setMaxDailyScans(cat.max_daily_scans);
     setPrice(cat.price);
@@ -107,8 +113,8 @@ export default function PassCategories() {
     const behavior = (cat.scan_behavior || 'ONE_TIME').toUpperCase();
     setScanBehavior(behavior);
     setRenewalTime(cat.renewal_time || '01:00');
-    setRenewalActiveFrom(cat.renewal_active_from ? new Date(cat.renewal_active_from).toISOString().slice(0, 16) : (cat.valid_from ? new Date(cat.valid_from).toISOString().slice(0, 16) : ''));
-    setRenewalActiveUntil(cat.renewal_active_until ? new Date(cat.renewal_active_until).toISOString().slice(0, 16) : (cat.valid_until ? new Date(cat.valid_until).toISOString().slice(0, 16) : ''));
+    setRenewalActiveFrom(toDatetimeLocalIST(cat.renewal_active_from || cat.valid_from));
+    setRenewalActiveUntil(toDatetimeLocalIST(cat.renewal_active_until || cat.valid_until));
     
     setShowModal(true);
   };
@@ -120,14 +126,14 @@ export default function PassCategories() {
         name,
         categoryPrefix,
         description,
-        validFrom,
-        validUntil,
+        validFrom: istDatetimeLocalToUTC(validFrom),
+        validUntil: istDatetimeLocalToUTC(validUntil),
         maxDailyScans,
         price,
         scanBehavior,
         renewalTime: scanBehavior === 'RENEWABLE' ? renewalTime : '01:00',
-        renewalActiveFrom: scanBehavior === 'RENEWABLE' ? (renewalActiveFrom || validFrom) : null,
-        renewalActiveUntil: scanBehavior === 'RENEWABLE' ? (renewalActiveUntil || validUntil) : null
+        renewalActiveFrom: scanBehavior === 'RENEWABLE' ? istDatetimeLocalToUTC(renewalActiveFrom || validFrom) : null,
+        renewalActiveUntil: scanBehavior === 'RENEWABLE' ? istDatetimeLocalToUTC(renewalActiveUntil || validUntil) : null
       };
 
       if (editingCategory) {

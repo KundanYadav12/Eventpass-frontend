@@ -3,6 +3,7 @@ import Modal from '../components/Modal';
 import { api } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { RotateCcw, Calendar, AlertCircle } from 'lucide-react';
+import { toDatetimeLocalIST, istDatetimeLocalToUTC } from '../utils/dateUtil';
 
 export default function RenewPassModal({ isOpen, onClose, pass, passIds = [], onRenewSuccess }) {
   const isBulk = Array.isArray(passIds) && passIds.length > 1;
@@ -18,9 +19,9 @@ export default function RenewPassModal({ isOpen, onClose, pass, passIds = [], on
 
   useEffect(() => {
     if (pass) {
-      // Pre-fill dates
-      const from = pass.valid_from ? new Date(pass.valid_from).toISOString().slice(0, 16) : '';
-      const until = pass.valid_until ? new Date(pass.valid_until).toISOString().slice(0, 16) : '';
+      // Pre-fill dates in IST
+      const from = pass.valid_from ? toDatetimeLocalIST(pass.valid_from) : '';
+      const until = pass.valid_until ? toDatetimeLocalIST(pass.valid_until) : '';
       setValidFrom(from);
       setValidUntil(until);
       setReason('');
@@ -47,8 +48,8 @@ export default function RenewPassModal({ isOpen, onClose, pass, passIds = [], on
       if (isBulk) {
         const res = await api.post('/passes/bulk-renew', {
           passIds,
-          validFrom: validFrom ? validFrom.replace('T', ' ') + ':00' : undefined,
-          validUntil: validUntil ? validUntil.replace('T', ' ') + ':00' : undefined,
+          validFrom: validFrom ? istDatetimeLocalToUTC(validFrom) : undefined,
+          validUntil: validUntil ? istDatetimeLocalToUTC(validUntil) : undefined,
           resetUsage,
           resetStatus,
           reason
@@ -60,8 +61,8 @@ export default function RenewPassModal({ isOpen, onClose, pass, passIds = [], on
         }
       } else if (pass) {
         const res = await api.post(`/passes/${pass.id}/renew`, {
-          validFrom: validFrom ? validFrom.replace('T', ' ') + ':00' : undefined,
-          validUntil: validUntil ? validUntil.replace('T', ' ') + ':00' : undefined,
+          validFrom: validFrom ? istDatetimeLocalToUTC(validFrom) : undefined,
+          validUntil: validUntil ? istDatetimeLocalToUTC(validUntil) : undefined,
           resetUsage,
           resetStatus,
           reason

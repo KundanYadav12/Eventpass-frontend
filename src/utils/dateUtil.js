@@ -1,26 +1,70 @@
 /**
  * Indian Standard Time (IST - Asia/Kolkata, UTC+5:30) Date & Time Utilities
  * 
- * Guarantees that all timestamps across the admin dashboard and tables
+ * Guarantees that all timestamps across the admin dashboard, modals, inputs, and tables
  * are formatted consistently in IST regardless of user browser or server timezone.
  */
 
 export const IST_TIMEZONE = 'Asia/Kolkata';
+export const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000; // 5 hours 30 mins in ms
 
 /**
- * Parses any date input safely into a Date object
+ * Parses any date input safely into a Date object in UTC
  */
 export function parseDate(dateInput) {
   if (!dateInput) return null;
   if (dateInput instanceof Date) return dateInput;
   if (typeof dateInput === 'string') {
-    // If format is 'YYYY-MM-DD HH:mm:ss' (MySQL timestamp without Z)
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(dateInput)) {
-      return new Date(dateInput.replace(' ', 'T') + 'Z');
+    const trimmed = dateInput.trim();
+    // If format is 'YYYY-MM-DD HH:mm:ss' (MySQL timestamp without Z, stored in UTC)
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) {
+      return new Date(trimmed.replace(' ', 'T') + 'Z');
     }
-    return new Date(dateInput);
+    return new Date(trimmed);
   }
   return new Date(dateInput);
+}
+
+/**
+ * Converts any UTC / MySQL / ISO timestamp into "YYYY-MM-DDTHH:mm" for <input type="datetime-local">
+ * Guaranteed to display the EXACT time in Indian Standard Time (IST) without browser timezone shifts.
+ */
+export function toDatetimeLocalIST(dateInput) {
+  if (!dateInput) return '';
+  const d = parseDate(dateInput);
+  if (!d || isNaN(d.getTime())) return '';
+
+  // Shift UTC date by +5:30 to get IST date components
+  const istDate = new Date(d.getTime() + IST_OFFSET_MS);
+  const year = istDate.getUTCFullYear();
+  const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(istDate.getUTCDate()).padStart(2, '0');
+  const hours = String(istDate.getUTCHours()).padStart(2, '0');
+  const minutes = String(istDate.getUTCMinutes()).padStart(2, '0');
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+/**
+ * Converts a datetime-local input string ("YYYY-MM-DDTHH:mm") chosen in IST
+ * into a UTC ISO string ("YYYY-MM-DDTHH:mm:00.000Z") for sending to backend.
+ */
+export function istDatetimeLocalToUTC(datetimeLocalStr) {
+  if (!datetimeLocalStr) return null;
+  const trimmed = datetimeLocalStr.trim();
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (!match) return datetimeLocalStr;
+
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10) - 1;
+  const day = parseInt(match[3], 10);
+  const hour = parseInt(match[4] || '0', 10);
+  const minute = parseInt(match[5] || '0', 10);
+  const second = parseInt(match[6] || '0', 10);
+
+  // Input was in IST (+5:30) -> subtract 5h 30m to get UTC epoch
+  const utcMs = Date.UTC(year, month, day, hour, minute, second) - IST_OFFSET_MS;
+  return new Date(utcMs).toISOString();
 }
 
 /**
