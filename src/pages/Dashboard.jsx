@@ -23,6 +23,7 @@ import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useEvent } from '../context/EventContext';
 import Badge from '../components/Badge';
+import { formatTimeWithSecondsIST } from '../utils/dateUtil';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -351,7 +352,7 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <div style={{ color: 'var(--text-subtle)', fontSize: '11.5px', fontWeight: 600 }}>
-                    {new Date(scan.scan_time).toLocaleTimeString()}
+                    {formatTimeWithSecondsIST(scan.scan_time)}
                   </div>
                 </div>
               ))

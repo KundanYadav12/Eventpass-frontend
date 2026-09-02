@@ -29,6 +29,7 @@ import { useToast } from '../context/ToastContext';
 import Badge from '../components/Badge';
 import Modal from '../components/Modal';
 import ScannableBarcode from '../components/ScannableBarcode';
+import { formatDateTimeIST } from '../utils/dateUtil';
 
 export default function PrintBatches() {
   const { events, selectedEvent } = useEvent();
@@ -848,7 +849,7 @@ export default function PrintBatches() {
 
                       <td>
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                          {new Date(batch.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                          {formatDateTimeIST(batch.created_at)}
                         </div>
                       </td>
 

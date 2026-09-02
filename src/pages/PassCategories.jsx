@@ -7,7 +7,11 @@ import {
   RefreshCw,
   Calendar,
   Layers,
-  Sparkles
+  Sparkles,
+  Clock,
+  RotateCw,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useEvent } from '../context/EventContext';
@@ -15,6 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
+import { formatDateIST, formatBehaviorSummary, formatClockTime } from '../utils/dateUtil';
 
 export default function PassCategories() {
   const { user } = useAuth();
@@ -36,6 +41,12 @@ export default function PassCategories() {
   const [totalQuantity, setTotalQuantity] = useState(1000);
   const [maxDailyScans, setMaxDailyScans] = useState(1);
   const [price, setPrice] = useState(0);
+
+  // Scan Behavior & Renewal Settings
+  const [scanBehavior, setScanBehavior] = useState('ONE_TIME'); // 'ONE_TIME' | 'RENEWABLE'
+  const [renewalTime, setRenewalTime] = useState('01:00');
+  const [renewalActiveFrom, setRenewalActiveFrom] = useState('');
+  const [renewalActiveUntil, setRenewalActiveUntil] = useState('');
 
   const toast = useToast();
 
@@ -65,11 +76,17 @@ export default function PassCategories() {
     setCode('');
     setCategoryPrefix('');
     setDescription('');
-    setValidFrom(selectedEvent ? new Date(selectedEvent.event_start_date).toISOString().slice(0, 16) : '2026-10-02T00:00');
-    setValidUntil(selectedEvent ? new Date(selectedEvent.event_end_date).toISOString().slice(0, 16) : '2026-10-02T23:59');
+    const defaultStart = selectedEvent ? new Date(selectedEvent.event_start_date).toISOString().slice(0, 16) : '2026-10-02T00:00';
+    const defaultEnd = selectedEvent ? new Date(selectedEvent.event_end_date).toISOString().slice(0, 16) : '2026-10-02T23:59';
+    setValidFrom(defaultStart);
+    setValidUntil(defaultEnd);
     setTotalQuantity(1000);
     setMaxDailyScans(1);
     setPrice(0);
+    setScanBehavior('ONE_TIME');
+    setRenewalTime('01:00');
+    setRenewalActiveFrom(defaultStart);
+    setRenewalActiveUntil(defaultEnd);
     setShowModal(true);
   };
 
@@ -80,27 +97,41 @@ export default function PassCategories() {
     setCode(cat.code);
     setCategoryPrefix(cat.category_prefix || '');
     setDescription(cat.description || '');
-    setValidFrom(new Date(cat.valid_from).toISOString().slice(0, 16));
-    setValidUntil(new Date(cat.valid_until).toISOString().slice(0, 16));
+    setValidFrom(cat.valid_from ? new Date(cat.valid_from).toISOString().slice(0, 16) : '');
+    setValidUntil(cat.valid_until ? new Date(cat.valid_until).toISOString().slice(0, 16) : '');
     setTotalQuantity(cat.total_quantity);
     setMaxDailyScans(cat.max_daily_scans);
     setPrice(cat.price);
+    
+    // Scan behavior state
+    const behavior = (cat.scan_behavior || 'ONE_TIME').toUpperCase();
+    setScanBehavior(behavior);
+    setRenewalTime(cat.renewal_time || '01:00');
+    setRenewalActiveFrom(cat.renewal_active_from ? new Date(cat.renewal_active_from).toISOString().slice(0, 16) : (cat.valid_from ? new Date(cat.valid_from).toISOString().slice(0, 16) : ''));
+    setRenewalActiveUntil(cat.renewal_active_until ? new Date(cat.renewal_active_until).toISOString().slice(0, 16) : (cat.valid_until ? new Date(cat.valid_until).toISOString().slice(0, 16) : ''));
+    
     setShowModal(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const payload = {
+        name,
+        categoryPrefix,
+        description,
+        validFrom,
+        validUntil,
+        maxDailyScans,
+        price,
+        scanBehavior,
+        renewalTime: scanBehavior === 'RENEWABLE' ? renewalTime : '01:00',
+        renewalActiveFrom: scanBehavior === 'RENEWABLE' ? (renewalActiveFrom || validFrom) : null,
+        renewalActiveUntil: scanBehavior === 'RENEWABLE' ? (renewalActiveUntil || validUntil) : null
+      };
+
       if (editingCategory) {
-        const res = await api.put(`/categories/${editingCategory.id}`, {
-          name,
-          categoryPrefix,
-          description,
-          validFrom,
-          validUntil,
-          maxDailyScans,
-          price
-        });
+        const res = await api.put(`/categories/${editingCategory.id}`, payload);
         if (res.success) {
           toast.success(res.message);
           setShowModal(false);
@@ -108,16 +139,10 @@ export default function PassCategories() {
         }
       } else {
         const res = await api.post('/categories', {
+          ...payload,
           eventId: parseInt(eventId, 10),
-          name,
           code,
-          categoryPrefix,
-          description,
-          validFrom,
-          validUntil,
-          totalQuantity,
-          maxDailyScans,
-          price
+          totalQuantity
         });
         if (res.success) {
           toast.success(res.message);
@@ -134,9 +159,9 @@ export default function PassCategories() {
     <div style={{ padding: '24px 32px', maxWidth: '1440px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Pass Categories</h1>
+          <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Pass Categories & Renewal Rules</h1>
           <p style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>
-            Configure ticket tiers, internal prefixes, and event-specific entry permissions
+            Configure ticket tiers, Indian Standard Time (IST) renewal cycles, and entry permissions
             {selectedEvent && <span> for <strong>{selectedEvent.event_name}</strong></span>}
           </p>
         </div>
@@ -161,9 +186,9 @@ export default function PassCategories() {
               <tr>
                 <th>Category Name</th>
                 <th>Internal Prefix</th>
-                <th>Validity Window</th>
-                <th>Daily Scans</th>
-                <th>Total Generated Passes</th>
+                <th>Validity Window (IST)</th>
+                <th>Scan Behavior & Renewal Rule</th>
+                <th>Total Passes</th>
                 <th>Printed / Used</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
@@ -182,73 +207,111 @@ export default function PassCategories() {
                   </td>
                 </tr>
               ) : (
-                categories.map((cat) => (
-                  <tr key={cat.id}>
-                    <td>
-                      <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{cat.name}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                        {cat.code} {cat.event_name ? `• ${cat.event_name}` : ''}
-                      </div>
-                    </td>
+                categories.map((cat) => {
+                  const isRenewable = (cat.scan_behavior || 'ONE_TIME').toUpperCase() === 'RENEWABLE';
+                  return (
+                    <tr key={cat.id}>
+                      <td>
+                        <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{cat.name}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                          {cat.code} {cat.event_name ? `• ${cat.event_name}` : ''}
+                        </div>
+                      </td>
 
-                    <td>
-                      {cat.category_prefix ? (
-                        <span style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontWeight: 700,
-                          backgroundColor: 'var(--primary-50)',
-                          color: 'var(--primary-700)',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontSize: '12px'
-                        }}>
-                          {cat.category_prefix}
-                        </span>
-                      ) : (
-                        <span style={{ color: 'var(--text-subtle)', fontSize: '12px' }}>None (Default)</span>
-                      )}
-                    </td>
+                      <td>
+                        {cat.category_prefix ? (
+                          <span style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontWeight: 700,
+                            backgroundColor: 'var(--primary-50)',
+                            color: 'var(--primary-700)',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}>
+                            {cat.category_prefix}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-subtle)', fontSize: '12px' }}>None (Default)</span>
+                        )}
+                      </td>
 
-                    <td>
-                      <div style={{ fontSize: '12.5px', color: 'var(--text-primary)' }}>
-                        {new Date(cat.valid_from).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – {new Date(cat.valid_until).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                      </div>
-                    </td>
+                      <td>
+                        <div style={{ fontSize: '12.5px', color: 'var(--text-primary)' }}>
+                          {formatDateIST(cat.valid_from)} – {formatDateIST(cat.valid_until)}
+                        </div>
+                      </td>
 
-                    <td>
-                      <span style={{ fontWeight: 700 }}>{cat.max_daily_scans} scan / day</span>
-                    </td>
+                      <td>
+                        {isRenewable ? (
+                          <div>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              backgroundColor: '#EFF6FF',
+                              color: '#1D4ED8',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 700
+                            }}>
+                              <RotateCw size={12} />
+                              Renews Daily @ {formatClockTime(cat.renewal_time || '01:00')} IST
+                            </span>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              Active: {formatDateIST(cat.renewal_active_from || cat.valid_from)} – {formatDateIST(cat.renewal_active_until || cat.valid_until)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            backgroundColor: '#F3F4F6',
+                            color: '#4B5563',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 600
+                          }}>
+                            <CheckCircle2 size={12} />
+                            One-Time Use (Permanent)
+                          </span>
+                        )}
+                      </td>
 
-                    <td>
-                      <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {Number(cat.total_passes_in_db ?? 0).toLocaleString()} passes
-                      </div>
-                      <small style={{ color: 'var(--text-subtle)', fontSize: '11px' }}>
-                        Limit: {Number(cat.total_quantity || 0).toLocaleString()}
-                      </small>
-                    </td>
+                      <td>
+                        <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {Number(cat.total_passes_in_db ?? 0).toLocaleString()} passes
+                        </div>
+                        <small style={{ color: 'var(--text-subtle)', fontSize: '11px' }}>
+                          Limit: {Number(cat.total_quantity || 0).toLocaleString()}
+                        </small>
+                      </td>
 
-                    <td>
-                      <div style={{ fontSize: '12.5px' }}>
-                        <span style={{ color: 'var(--primary-600)', fontWeight: 600 }}>{cat.printed_count || 0} printed</span> • <span style={{ color: 'var(--success-accent)', fontWeight: 600 }}>{cat.used_count || 0} used</span>
-                      </div>
-                    </td>
+                      <td>
+                        <div style={{ fontSize: '12.5px' }}>
+                          <span style={{ color: 'var(--primary-600)', fontWeight: 600 }}>{cat.printed_count || 0} printed</span> • <span style={{ color: 'var(--success-accent)', fontWeight: 600 }}>{cat.used_count || 0} used</span>
+                        </div>
+                      </td>
 
-                    <td style={{ textAlign: 'right' }}>
-                      {isSuperAdmin ? (
-                        <button
-                          onClick={() => handleOpenEdit(cat)}
-                          className="btn btn-secondary btn-sm btn-icon"
-                          title="Edit Category"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                      ) : (
-                        <span style={{ fontSize: '12px', color: 'var(--text-subtle)', fontStyle: 'italic' }}>View Only</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                      <td style={{ textAlign: 'right' }}>
+                        {isSuperAdmin ? (
+                          <button
+                            onClick={() => handleOpenEdit(cat)}
+                            className="btn btn-secondary btn-sm btn-icon"
+                            title="Edit Category"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: 'var(--text-subtle)', fontStyle: 'italic' }}>View Only</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -259,8 +322,8 @@ export default function PassCategories() {
       <Modal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
-        title={editingCategory ? 'Edit Category' : 'Create Pass Category'}
-        maxWidth="540px"
+        title={editingCategory ? 'Edit Category & Renewal Rules' : 'Create Pass Category'}
+        maxWidth="580px"
       >
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
@@ -322,7 +385,7 @@ export default function PassCategories() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Valid From *</label>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Valid From (IST) *</label>
               <input
                 type="datetime-local"
                 value={validFrom}
@@ -332,7 +395,7 @@ export default function PassCategories() {
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Valid Until *</label>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Valid Until (IST) *</label>
               <input
                 type="datetime-local"
                 value={validUntil}
@@ -341,6 +404,123 @@ export default function PassCategories() {
                 style={{ width: '100%' }}
               />
             </div>
+          </div>
+
+          {/* SCAN BEHAVIOR & RENEWAL RULES SECTION */}
+          <div style={{
+            border: '1px solid var(--border-color, #E2E8F0)',
+            borderRadius: '8px',
+            padding: '14px',
+            backgroundColor: 'var(--bg-subtle, #F8FAFC)'
+          }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)' }}>
+              🎯 Scan Behavior Mode *
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 12px',
+                borderRadius: '6px',
+                border: scanBehavior === 'ONE_TIME' ? '2px solid var(--primary-600, #2563EB)' : '1px solid #CBD5E1',
+                backgroundColor: scanBehavior === 'ONE_TIME' ? '#EFF6FF' : '#FFFFFF',
+                cursor: 'pointer'
+              }}>
+                <input
+                  type="radio"
+                  name="scanBehavior"
+                  value="ONE_TIME"
+                  checked={scanBehavior === 'ONE_TIME'}
+                  onChange={() => setScanBehavior('ONE_TIME')}
+                />
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700 }}>One-Time Use</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Permanent expiry after 1 scan</div>
+                </div>
+              </label>
+
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 12px',
+                borderRadius: '6px',
+                border: scanBehavior === 'RENEWABLE' ? '2px solid var(--primary-600, #2563EB)' : '1px solid #CBD5E1',
+                backgroundColor: scanBehavior === 'RENEWABLE' ? '#EFF6FF' : '#FFFFFF',
+                cursor: 'pointer'
+              }}>
+                <input
+                  type="radio"
+                  name="scanBehavior"
+                  value="RENEWABLE"
+                  checked={scanBehavior === 'RENEWABLE'}
+                  onChange={() => setScanBehavior('RENEWABLE')}
+                />
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 700 }}>Renewable</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Scheduled daily/recurring reset</div>
+                </div>
+              </label>
+            </div>
+
+            {/* CONDITIONAL RENEWAL FIELDS (REVEALED WHEN RENEWABLE IS SELECTED) */}
+            {scanBehavior === 'RENEWABLE' && (
+              <div style={{
+                marginTop: '12px',
+                paddingTop: '12px',
+                borderTop: '1px dashed #CBD5E1',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, marginBottom: '4px' }}>
+                    ⏰ Renewal Time (IST Clock Time) *
+                  </label>
+                  <input
+                    type="time"
+                    value={renewalTime}
+                    onChange={(e) => setRenewalTime(e.target.value)}
+                    required={scanBehavior === 'RENEWABLE'}
+                    style={{ width: '100%', maxWidth: '200px' }}
+                  />
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    The exact time in Indian Standard Time (IST) when the daily scan lock resets (e.g. 01:00 AM).
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, marginBottom: '4px' }}>
+                      Renewal Active From (IST) *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={renewalActiveFrom}
+                      onChange={(e) => setRenewalActiveFrom(e.target.value)}
+                      required={scanBehavior === 'RENEWABLE'}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, marginBottom: '4px' }}>
+                      Renewal Active Until (IST) *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={renewalActiveUntil}
+                      onChange={(e) => setRenewalActiveUntil(e.target.value)}
+                      required={scanBehavior === 'RENEWABLE'}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  During this date range, passes unlock daily at {formatClockTime(renewalTime)} IST. Outside this window, passes expire.
+                </div>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

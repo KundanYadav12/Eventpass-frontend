@@ -14,6 +14,7 @@ import { useEvent } from '../context/EventContext';
 import { useToast } from '../context/ToastContext';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
+import { formatDateTimeIST } from '../utils/dateUtil';
 
 export default function UserManagement() {
   const { events, selectedEvent } = useEvent();
@@ -224,7 +225,7 @@ export default function UserManagement() {
 
                     <td>
                       <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                        {u.last_login_at ? new Date(u.last_login_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Never'}
+                        {u.last_login_at ? formatDateTimeIST(u.last_login_at) : 'Never'}
                       </span>
                     </td>
 

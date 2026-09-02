@@ -20,6 +20,7 @@ import { api } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
+import { formatDateIST, formatTimeWithSecondsIST, formatDateTimeIST } from '../utils/dateUtil';
 import ScannableBarcode from '../components/ScannableBarcode';
 
 export default function PassDetailsModal({ passId, onClose, onRenew, onVoid, onReissue }) {
@@ -310,8 +311,8 @@ export default function PassDetailsModal({ passId, onClose, onRenew, onVoid, onR
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    <div>{new Date(sh.scan_time).toLocaleTimeString()}</div>
-                    <div style={{ fontSize: '11px' }}>{new Date(sh.scan_time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
+                    <div>{formatTimeWithSecondsIST(sh.scan_time)}</div>
+                    <div style={{ fontSize: '11px' }}>{formatDateIST(sh.scan_time)}</div>
                   </div>
                 </div>
               ))
@@ -344,7 +345,7 @@ export default function PassDetailsModal({ passId, onClose, onRenew, onVoid, onR
                     </div>
                   </div>
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    {new Date(pl.printed_at).toLocaleString()}
+                    {formatDateTimeIST(pl.printed_at)}
                   </div>
                 </div>
               ))
@@ -369,7 +370,7 @@ export default function PassDetailsModal({ passId, onClose, onRenew, onVoid, onR
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <span style={{ fontWeight: 700 }}>{ah.action}</span>
-                    <span style={{ color: 'var(--text-muted)' }}>{new Date(ah.created_at).toLocaleString()}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{formatDateTimeIST(ah.created_at)}</span>
                   </div>
                   <div style={{ color: 'var(--text-muted)' }}>By: {ah.user_name || 'Admin'}</div>
                 </div>

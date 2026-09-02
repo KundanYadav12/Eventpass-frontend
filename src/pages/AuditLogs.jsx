@@ -14,6 +14,7 @@ import { useToast } from '../context/ToastContext';
 import Pagination from '../components/Pagination';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
+import { formatDateIST, formatTimeWithSecondsIST, formatDateTimeIST } from '../utils/dateUtil';
 
 export default function AuditLogs() {
   const { selectedEvent } = useEvent();
@@ -173,10 +174,10 @@ export default function AuditLogs() {
                   <tr key={log.id}>
                     <td>
                       <div style={{ fontSize: '13px', fontWeight: 600 }}>
-                        {new Date(log.created_at).toLocaleTimeString()}
+                        {formatTimeWithSecondsIST(log.created_at)}
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {new Date(log.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                        {formatDateIST(log.created_at)}
                       </div>
                     </td>
 

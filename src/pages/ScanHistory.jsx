@@ -16,6 +16,8 @@ import { useToast } from '../context/ToastContext';
 import Pagination from '../components/Pagination';
 import Badge from '../components/Badge';
 
+import { formatDateIST, formatTimeWithSecondsIST } from '../utils/dateUtil';
+
 export default function ScanHistory() {
   const { selectedEvent } = useEvent();
   const [history, setHistory] = useState([]);
@@ -176,10 +178,10 @@ export default function ScanHistory() {
                   <tr key={s.id}>
                     <td>
                       <div style={{ fontSize: '13px', fontWeight: 600 }}>
-                        {new Date(s.scan_time).toLocaleTimeString()}
+                        {formatTimeWithSecondsIST(s.scan_time)}
                       </div>
                       <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {new Date(s.scan_time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                        {formatDateIST(s.scan_time)}
                       </div>
                     </td>
 
