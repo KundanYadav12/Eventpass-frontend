@@ -18,13 +18,17 @@ import {
   Copy,
   Check,
   Activity,
-  Terminal
+  Terminal,
+  Eye,
+  QrCode,
+  Barcode
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useEvent } from '../context/EventContext';
 import { useToast } from '../context/ToastContext';
 import Badge from '../components/Badge';
 import Modal from '../components/Modal';
+import ScannableBarcode from '../components/ScannableBarcode';
 
 export default function PrintBatches() {
   const { events, selectedEvent } = useEvent();
@@ -55,6 +59,7 @@ export default function PrintBatches() {
 
   const [printerSettings, setPrinterSettings] = useState(null);
   const [commandLanguage, setCommandLanguage] = useState('TSPL');
+  const [barcodePattern, setBarcodePattern] = useState('QR_CODE');
   const [savingSettings, setSavingSettings] = useState(false);
 
   const fetchSettings = async () => {
@@ -64,24 +69,27 @@ export default function PrintBatches() {
         setPrinterSettings(res.settings);
         setSelectedPrinter(res.settings.printer_name || 'TSC TE244');
         setCommandLanguage(res.settings.command_language || 'TSPL');
+        setBarcodePattern(res.settings.barcode_type || 'QR_CODE');
       }
     } catch (e) {
       // Ignore
     }
   };
 
-  const handleUpdatePrinterConfig = async (newPrinterName, newLang = commandLanguage) => {
+  const handleUpdatePrinterConfig = async (newPrinterName, newLang = commandLanguage, newPattern = barcodePattern) => {
     setSavingSettings(true);
     try {
       const res = await api.put('/print/settings', {
         printer_name: newPrinterName,
-        command_language: newLang
+        command_language: newLang,
+        barcode_type: newPattern
       });
       if (res.success) {
         setPrinterSettings(res.settings);
         setSelectedPrinter(res.settings.printer_name);
         setCommandLanguage(res.settings.command_language);
-        toast.success(`Active printer set to '${res.settings.printer_name}' (${res.settings.command_language})`);
+        setBarcodePattern(res.settings.barcode_type || newPattern);
+        toast.success(`Active configuration saved (${res.settings.printer_name} • ${res.settings.command_language} • ${res.settings.barcode_type})`);
       }
     } catch (err) {
       toast.error('Failed to save printer configuration');
@@ -164,11 +172,12 @@ export default function PrintBatches() {
     try {
       const res = await api.post('/print/test-barcode', {
         printerName: selectedPrinter,
-        barcodeValue: '55KDBD2'
+        barcodeValue: '55KDBD2',
+        pattern: barcodePattern
       });
       if (res.success) {
         setLastDispatchedLog({
-          title: `Physical Barcode Test (Code 128: ${res.barcodeValue})`,
+          title: `Physical Label Test (${res.barcodeType}: ${res.barcodeValue})`,
           printer: res.printerName,
           bytesSent: res.bytesSent,
           message: res.message,
@@ -180,33 +189,9 @@ export default function PrintBatches() {
         fetchDiagnostics(selectedPrinter);
       }
     } catch (err) {
-      toast.error(err.message || 'Barcode test failed');
+      toast.error(err.message || 'Label test failed');
     } finally {
       setTestingBarcode(false);
-    }
-  };
-
-  const handleTestPrint = async () => {
-    setTestingPrinter(true);
-    try {
-      const res = await api.post('/print/test', { printerName: selectedPrinter });
-      if (res.success) {
-        setLastDispatchedLog({
-          title: 'Sample Test Label (Dummy)',
-          printer: res.printerName,
-          bytesSent: res.bytesSent,
-          message: res.message,
-          tspl: res.tsplSent,
-          diagnostics: res.diagnostics,
-          time: new Date().toLocaleTimeString()
-        });
-        toast.success(res.message);
-        fetchDiagnostics(selectedPrinter);
-      }
-    } catch (err) {
-      toast.error(err.message || 'Printer test failed');
-    } finally {
-      setTestingPrinter(false);
     }
   };
 
@@ -272,7 +257,7 @@ export default function PrintBatches() {
   };
 
   const handleOpenCreate = () => {
-    const defaultEventId = selectedEvent ? String(selectedEvent.id) : (events[0] ? String(events[0].id) : '1');
+    const defaultEventId = selectedEvent?.id ? String(selectedEvent.id) : (events[0]?.id ? String(events[0].id) : '1');
     setTargetEventId(defaultEventId);
     fetchCategories(defaultEventId);
     setBatchName('');
@@ -292,8 +277,9 @@ export default function PrintBatches() {
       const res = await api.post('/print/batches', {
         eventId: parseInt(targetEventId, 10),
         categoryId: parseInt(targetCategoryId, 10),
-        name: batchName,
-        quantity: parseInt(quantity, 10)
+        name: batchName.trim() || undefined,
+        quantity: parseInt(quantity, 10),
+        barcodePattern
       });
       if (res.success) {
         toast.success(res.message);
@@ -407,6 +393,9 @@ export default function PrintBatches() {
     toast.success('Raw TSPL copied to clipboard');
   };
 
+  const selectedCategoryObj = categories.find(c => String(c.id) === String(targetCategoryId)) || categories[0] || { name: 'VIP PASS', code: 'VIP' };
+  const currentEventName = selectedEvent ? selectedEvent.event_name : (events[0] ? events[0].event_name : 'Raas Utsav 2026');
+
   return (
     <div style={{ padding: '24px 32px', maxWidth: '1440px', margin: '0 auto' }}>
       {/* Top Header */}
@@ -414,12 +403,12 @@ export default function PrintBatches() {
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 800 }}>TSC TE244 Thermal Print Center</h1>
           <p style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>
-            Windows RAW Spooler Queue • 50mm × 50mm 2-Up Stock
+            Windows RAW Spooler Queue • 38mm × 50mm 2-Up Stock
             {selectedEvent && <span> for <strong>{selectedEvent.event_name}</strong></span>}
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button onClick={() => setShowDiagModal(true)} className="btn btn-secondary" title="Hardware Diagnostics & LED Guide">
             <Activity size={16} color="var(--primary-600)" />
             <span>Printer Diagnostics & LED Guide</span>
@@ -434,39 +423,66 @@ export default function PrintBatches() {
         </div>
       </div>
 
-      {/* Printer Hardware & Calibration Status Bar */}
-      <div className="card" style={{
-        marginBottom: '20px',
-        padding: '16px 20px',
-        background: 'linear-gradient(135deg, var(--bg-surface), var(--bg-surface-hover))',
-        border: '1px solid var(--border-color)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: diagnostics?.isOffline ? 'rgba(239, 68, 68, 0.15)' : 'var(--primary-50)',
-              color: diagnostics?.isOffline ? 'var(--danger-accent)' : 'var(--primary-600)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Printer size={22} />
+      {/* Main Hardware Status Bar + Live 38mm x 50mm Label Preview Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+        {/* Left Card: Hardware & Calibration Controls */}
+        <div className="card" style={{
+          padding: '20px',
+          background: 'linear-gradient(135deg, var(--bg-surface), var(--bg-surface-hover))',
+          border: '1px solid var(--border-color)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          gap: '16px'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+              <div style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: diagnostics?.isOffline ? 'rgba(239, 68, 68, 0.15)' : 'var(--primary-50)',
+                color: diagnostics?.isOffline ? 'var(--danger-accent)' : 'var(--primary-600)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <Printer size={22} />
+              </div>
+
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  Hardware Spooler Controls
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  {diagnostics?.explanation || 'Pluggable Driver • 38mm × 50mm Thermal Stock'}
+                </div>
+              </div>
+
+              <Badge variant={
+                diagnostics?.isOffline ? 'danger' :
+                diagnostics?.isPaused ? 'warning' :
+                diagnostics?.hasErrors ? 'danger' : 'success'
+              }>
+                {diagnostics?.statusLabel || 'READY'} ({diagnostics?.port || 'USB001'})
+              </Badge>
             </div>
 
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '13.5px', fontWeight: 800 }}>Active Printer:</span>
+            {/* Config Selectors */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginTop: '10px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                  Active Printer
+                </label>
                 <select
                   value={selectedPrinter}
                   onChange={(e) => {
                     const val = e.target.value;
                     setSelectedPrinter(val);
-                    handleUpdatePrinterConfig(val, commandLanguage);
+                    handleUpdatePrinterConfig(val, commandLanguage, barcodePattern);
                   }}
-                  style={{ padding: '4px 10px', fontSize: '13px', fontWeight: 700, borderRadius: '6px' }}
+                  style={{ width: '100%', padding: '6px 8px', fontSize: '12.5px', fontWeight: 700, borderRadius: '6px' }}
                 >
                   {printers.map(p => (
                     <option key={p.name} value={p.name}>
@@ -477,54 +493,53 @@ export default function PrintBatches() {
                     <option value="TSC TE244">TSC TE244 (Default Seagull Driver)</option>
                   )}
                 </select>
+              </div>
 
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                  Language
+                </label>
                 <select
                   value={commandLanguage}
                   onChange={(e) => {
                     const lang = e.target.value;
                     setCommandLanguage(lang);
-                    handleUpdatePrinterConfig(selectedPrinter, lang);
+                    handleUpdatePrinterConfig(selectedPrinter, lang, barcodePattern);
                   }}
-                  style={{ padding: '4px 8px', fontSize: '12px', fontWeight: 700, borderRadius: '6px' }}
-                  title="Select Command Language (TSPL, ZPL, ESC/POS, Generic Text)"
+                  style={{ width: '100%', padding: '6px 8px', fontSize: '12.5px', fontWeight: 700, borderRadius: '6px' }}
+                  title="Select Command Language (TSPL, ZPL, ESC/POS)"
                 >
                   <option value="TSPL">TSPL (TSC / Gprinter)</option>
                   <option value="ZPL">ZPL (Zebra / Citizen)</option>
-                  <option value="ESCPOS">ESC/POS (Epson / POS Receipt)</option>
-                  <option value="GENERIC_TEXT">Generic Text (Windows Spooler)</option>
+                  <option value="ESCPOS">ESC/POS (Epson / POS)</option>
+                  <option value="GENERIC_TEXT">Generic Text (Spooler)</option>
                 </select>
-
-                <Badge variant={
-                  diagnostics?.isOffline ? 'danger' :
-                  diagnostics?.isPaused ? 'warning' :
-                  diagnostics?.hasErrors ? 'danger' : 'success'
-                }>
-                  {diagnostics?.statusLabel || 'READY'} ({diagnostics?.port || 'USB001'})
-                </Badge>
-
-                {printerSettings?.gateway_mode ? (
-                  <Badge variant="info" title={`Cloud Gateway Mode (Key: ${printerSettings.gateway_api_key})`}>
-                    ☁️ Cloud Gateway Mode
-                  </Badge>
-                ) : (
-                  <Badge variant="neutral">
-                    🔌 Local USB Mode
-                  </Badge>
-                )}
-
-                {diagnostics?.activeJobCount > 0 && (
-                  <Badge variant="info">
-                    {diagnostics.activeJobCount} in spooler
-                  </Badge>
-                )}
               </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                {diagnostics?.explanation || 'Pluggable Driver • 50mm × 50mm Thermal Stock'}
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                  Barcode Pattern
+                </label>
+                <select
+                  value={barcodePattern}
+                  onChange={(e) => {
+                    const pat = e.target.value;
+                    setBarcodePattern(pat);
+                    handleUpdatePrinterConfig(selectedPrinter, commandLanguage, pat);
+                  }}
+                  style={{ width: '100%', padding: '6px 8px', fontSize: '12.5px', fontWeight: 700, borderRadius: '6px' }}
+                  title="Select Default Barcode Pattern (QR Code, Code 128, Code 39)"
+                >
+                  <option value="QR_CODE">QR Code (2D)</option>
+                  <option value="CODE128">Code 128 (1D)</option>
+                  <option value="CODE39">Code 39 (1D)</option>
+                </select>
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', paddingTop: '10px', borderTop: '1px solid var(--border-color)' }}>
             <button
               onClick={handleReconnect}
               className="btn btn-outline btn-sm"
@@ -558,36 +573,157 @@ export default function PrintBatches() {
               onClick={handleTestBarcode}
               disabled={testingBarcode}
               className="btn btn-primary btn-sm"
-              style={{ fontWeight: 800 }}
+              style={{ fontWeight: 800, marginLeft: 'auto' }}
               title="Print 1 actual physical test barcode label using active driver language"
             >
               <Zap size={14} />
-              <span>{testingBarcode ? 'Printing...' : `Print 1 Test Label (${commandLanguage})`}</span>
+              <span>{testingBarcode ? 'Printing...' : `Print 1 Test (${barcodePattern.replace('_CODE', '')})`}</span>
             </button>
           </div>
+
+          {diagnostics?.isOffline && (
+            <div style={{
+              padding: '10px 14px',
+              backgroundColor: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px'
+            }}>
+              <div style={{ fontSize: '12.5px', color: '#ef4444', fontWeight: 600 }}>
+                ⚠️ Printer &apos;{selectedPrinter}&apos; is Offline. Ensure USB cable is plugged in and power switch is ON.
+              </div>
+              <button onClick={handleReconnect} className="btn btn-outline btn-sm" style={{ borderColor: '#ef4444', color: '#ef4444' }}>
+                <RotateCw size={13} />
+                <span>Retry</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {diagnostics?.isOffline && (
-          <div style={{
-            marginTop: '14px',
-            padding: '10px 14px',
-            backgroundColor: 'rgba(239, 68, 68, 0.08)',
-            border: '1px solid rgba(239, 68, 68, 0.25)',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px'
-          }}>
-            <div style={{ fontSize: '13px', color: '#ef4444', fontWeight: 600 }}>
-              ⚠️ Printer &apos;{selectedPrinter}&apos; is currently Offline or Disconnected. Please ensure USB cable is connected and printer power is turned ON.
+        {/* Right Card: Live 38mm x 50mm Thermal Sticker Preview Panel */}
+        <div className="card" style={{
+          padding: '20px',
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Eye size={16} color="var(--primary-600)" />
+              <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                Live Thermal Sticker Preview
+              </span>
             </div>
-            <button onClick={handleReconnect} className="btn btn-outline btn-sm" style={{ borderColor: '#ef4444', color: '#ef4444' }}>
-              <RotateCw size={13} />
-              <span>Retry Connection</span>
-            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', gap: '3px', backgroundColor: 'var(--bg-body)', padding: '2px', borderRadius: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setBarcodePattern('QR_CODE')}
+                  style={{
+                    padding: '3px 8px',
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    borderRadius: '4px',
+                    border: 'none',
+                    backgroundColor: barcodePattern === 'QR_CODE' ? 'var(--primary-600)' : 'transparent',
+                    color: barcodePattern === 'QR_CODE' ? '#ffffff' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  QR Code
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBarcodePattern('CODE128')}
+                  style={{
+                    padding: '3px 8px',
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    borderRadius: '4px',
+                    border: 'none',
+                    backgroundColor: barcodePattern === 'CODE128' ? 'var(--primary-600)' : 'transparent',
+                    color: barcodePattern === 'CODE128' ? '#ffffff' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Code 128
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBarcodePattern('CODE39')}
+                  style={{
+                    padding: '3px 8px',
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    borderRadius: '4px',
+                    border: 'none',
+                    backgroundColor: barcodePattern === 'CODE39' ? 'var(--primary-600)' : 'transparent',
+                    color: barcodePattern === 'CODE39' ? '#ffffff' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Code 39
+                </button>
+              </div>
+
+              <span className="badge badge-primary" style={{ fontSize: '10px' }}>
+                38mm × 50mm Stock
+              </span>
+            </div>
           </div>
-        )}
+
+          {/* The Physical 38mm x 50mm Thermal Sticker Render */}
+          <div style={{
+            width: '190px',
+            height: '250px',
+            backgroundColor: '#ffffff',
+            borderRadius: '6px',
+            border: '2px solid #0f172a',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+            padding: '12px 10px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            color: '#0f172a',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            boxSizing: 'border-box'
+          }}>
+            {/* Scannable Barcode / QR Stream & Pass Code */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+              <ScannableBarcode
+                value="55KDBD2"
+                type={barcodePattern}
+                size="lg"
+                showText={false}
+                style={{ padding: '0px', border: 'none', boxShadow: 'none' }}
+              />
+
+              <div style={{
+                fontFamily: 'var(--font-mono, monospace)',
+                fontSize: '13.5px',
+                fontWeight: 900,
+                letterSpacing: '1.5px',
+                color: '#0f172a',
+                marginTop: '10px',
+                textAlign: 'center'
+              }}>
+                PASS CODE: 55KDBD2
+              </div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '8px', textAlign: 'center' }}>
+            Exact 38mm × 50mm layout rendered by the TSPL/ZPL command stream.
+          </div>
+        </div>
       </div>
 
       {/* Live Dispatched RAW TSPL Inspector Card (If recent print executed) */}
@@ -640,6 +776,7 @@ export default function PrintBatches() {
               <tr>
                 <th>Batch Name</th>
                 <th>Event & Category</th>
+                <th>Pattern</th>
                 <th>Progress</th>
                 <th>Status</th>
                 <th>Created At</th>
@@ -649,20 +786,21 @@ export default function PrintBatches() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
                     Loading print batches...
                   </td>
                 </tr>
               ) : batches.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-                    No print batches created for this event. Click "New Print Batch" to allocate passes.
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                    No print batches created for this event. Click &quot;New Print Batch&quot; to allocate passes.
                   </td>
                 </tr>
               ) : (
                 batches.map((batch) => {
                   const progressPct = batch.total_requested > 0 ? Math.round((batch.printed_count / batch.total_requested) * 100) : 0;
                   const isOutOfStock = batch.status === 'paused_out_of_stock';
+                  const patternLabel = (batch.barcode_pattern || 'QR_CODE').replace('_CODE', '');
 
                   return (
                     <tr key={batch.id}>
@@ -678,6 +816,12 @@ export default function PrintBatches() {
                       <td>
                         <div style={{ fontWeight: 600 }}>{batch.category_name || batch.pass_type}</div>
                         <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>{batch.event_name || 'Event 2026'}</div>
+                      </td>
+
+                      <td>
+                        <span className="badge badge-neutral" style={{ fontSize: '11px', fontWeight: 700 }}>
+                          {patternLabel}
+                        </span>
                       </td>
 
                       <td style={{ minWidth: '160px' }}>
@@ -820,7 +964,7 @@ export default function PrintBatches() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
                 <div>
-                  <strong>🔵 / 🟢 Blinking Blue or Green:</strong> The printer is in <strong>Pause Mode</strong> or the <strong>Gap Sensor is not calibrated</strong>. Click <em>"Calibrate Gap"</em> above, or press the physical <strong>FEED</strong> button once to clear pause mode.
+                  <strong>🔵 / 🟢 Blinking Blue or Green:</strong> The printer is in <strong>Pause Mode</strong> or the <strong>Gap Sensor is not calibrated</strong>. Click <em>&quot;Calibrate Gap&quot;</em> above, or press the physical <strong>FEED</strong> button once to clear pause mode.
                 </div>
                 <div>
                   <strong>🔴 Blinking Red:</strong> Out of labels/stock, thermal transfer ribbon ended, or top cover is open.
@@ -896,6 +1040,20 @@ export default function PrintBatches() {
           </div>
 
           <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Barcode Pattern / Symbology *</label>
+            <select
+              value={barcodePattern}
+              onChange={(e) => setBarcodePattern(e.target.value)}
+              style={{ width: '100%' }}
+              required
+            >
+              <option value="QR_CODE">QR Code (2D High-Speed Matrix)</option>
+              <option value="CODE128">Code 128 (1D High-Density Barcode)</option>
+              <option value="CODE39">Code 39 (1D Standard Barcode)</option>
+            </select>
+          </div>
+
+          <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Batch Name (Optional)</label>
             <input
               type="text"
@@ -943,7 +1101,7 @@ export default function PrintBatches() {
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-              Dual-column 50mm × 50mm TSPL instructions with 7-digit pass codes ready for TSC TE244 printer:
+              Dual-column 38mm × 50mm TSPL instructions with 7-digit pass codes ready for TSC TE244 printer:
             </div>
 
             <pre style={{

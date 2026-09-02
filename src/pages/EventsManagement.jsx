@@ -13,13 +13,80 @@ import {
   CheckCircle2,
   Clock,
   Search,
-  Building2
+  Building2,
+  QrCode,
+  Barcode,
+  Eye
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useEvent } from '../context/EventContext';
 import { useToast } from '../context/ToastContext';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
+import ScannableBarcode from '../components/ScannableBarcode';
+
+/**
+ * 38mm × 50mm Live Thermal Sticker Preview Component
+ */
+function StickerPreview({ barcodeType, sampleCode = '55KDBD2' }) {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: '8px',
+      padding: '16px',
+      backgroundColor: 'var(--bg-surface-hover)',
+      borderRadius: 'var(--radius-md)',
+      border: '1px solid var(--border-color)'
+    }}>
+      <div style={{ fontSize: '11.5px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        Live Thermal Label Preview (38mm × 50mm Ratio)
+      </div>
+
+      {/* The 38mm x 50mm Thermal Label Shell */}
+      <div style={{
+        width: '180px',
+        height: '237px', // Exact 38:50 aspect ratio
+        backgroundColor: '#FFFFFF',
+        color: '#000000',
+        borderRadius: '6px',
+        boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
+        border: '1px solid #CBD5E1',
+        padding: '12px 8px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        textAlign: 'center',
+        position: 'relative',
+        boxSizing: 'border-box'
+      }}>
+        {/* Barcode / QR Code Body & Pass Code Text */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+          <ScannableBarcode
+            value={sampleCode}
+            type={barcodeType || 'QR_CODE'}
+            size="lg"
+            showText={false}
+            style={{ border: 'none', padding: 0, boxShadow: 'none' }}
+          />
+
+          <div style={{
+            fontFamily: 'var(--font-mono, monospace)',
+            fontSize: '13px',
+            fontWeight: 900,
+            letterSpacing: '1.5px',
+            color: '#000000',
+            marginTop: '8px'
+          }}>
+            PASS CODE: {sampleCode}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function EventsManagement() {
   const { events, selectedEvent, selectEvent, refreshEvents, loading } = useEvent();
@@ -37,6 +104,9 @@ export default function EventsManagement() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [status, setStatus] = useState('active');
+  const [barcodeType, setBarcodeType] = useState('QR_CODE');
+  const [stickerWidthMm, setStickerWidthMm] = useState(38);
+  const [stickerHeightMm, setStickerHeightMm] = useState(50);
   const [submitting, setSubmitting] = useState(false);
 
   const toast = useToast();
@@ -52,6 +122,9 @@ export default function EventsManagement() {
     nextWeek.setDate(nextWeek.getDate() + 3);
     setEndDate(nextWeek.toISOString().slice(0, 16));
     setStatus('active');
+    setBarcodeType('QR_CODE');
+    setStickerWidthMm(38);
+    setStickerHeightMm(50);
     setShowCreateModal(true);
   };
 
@@ -64,6 +137,9 @@ export default function EventsManagement() {
     setStartDate(new Date(ev.event_start_date).toISOString().slice(0, 16));
     setEndDate(new Date(ev.event_end_date).toISOString().slice(0, 16));
     setStatus(ev.status);
+    setBarcodeType(ev.barcode_type || 'QR_CODE');
+    setStickerWidthMm(ev.sticker_width_mm || 38);
+    setStickerHeightMm(ev.sticker_height_mm || 50);
     setShowEditModal(true);
   };
 
@@ -78,7 +154,10 @@ export default function EventsManagement() {
         venue,
         startDate,
         endDate,
-        status
+        status,
+        barcodeType,
+        stickerWidthMm,
+        stickerHeightMm
       });
 
       if (res.success) {
@@ -105,7 +184,10 @@ export default function EventsManagement() {
         venue,
         startDate,
         endDate,
-        status
+        status,
+        barcodeType,
+        stickerWidthMm,
+        stickerHeightMm
       });
 
       if (res.success) {
@@ -155,7 +237,7 @@ export default function EventsManagement() {
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Events Management</h1>
           <p style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>
-            Create and manage independent events, venues, dates, and dedicated event ecosystems
+            Create and manage independent events, venues, barcode formats, and dedicated ticketing ecosystems
           </p>
         </div>
 
@@ -195,7 +277,7 @@ export default function EventsManagement() {
         </div>
       </div>
 
-      {/* Events Table / Card Grid */}
+      {/* Events Table */}
       <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
         <div className="table-responsive">
           <table className="table">
@@ -203,10 +285,10 @@ export default function EventsManagement() {
               <tr>
                 <th>Event Name & Code</th>
                 <th>Dates & Venue</th>
+                <th>Barcode Format</th>
                 <th>Status</th>
                 <th>Categories</th>
                 <th>Pass Inventory</th>
-                <th>Admins</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
@@ -220,6 +302,7 @@ export default function EventsManagement() {
               ) : (
                 filteredEvents.map((ev) => {
                   const isCurrent = selectedEvent?.id === ev.id;
+                  const isQR = (ev.barcode_type || 'QR_CODE') === 'QR_CODE';
                   return (
                     <tr key={ev.id} style={{ backgroundColor: isCurrent ? 'var(--primary-50)' : 'transparent' }}>
                       <td>
@@ -273,6 +356,18 @@ export default function EventsManagement() {
                       </td>
 
                       <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {isQR ? <QrCode size={16} color="var(--primary-600)" /> : <Barcode size={16} color="var(--primary-600)" />}
+                          <span style={{ fontWeight: 700, fontSize: '12.5px' }}>
+                            {isQR ? 'QR Code (2D)' : 'Code128 (1D)'}
+                          </span>
+                        </div>
+                        <small style={{ fontSize: '11px', color: 'var(--text-subtle)' }}>
+                          38mm × 50mm Thermal
+                        </small>
+                      </td>
+
+                      <td>
                         <Badge variant={ev.status === 'active' ? 'success' : ev.status === 'upcoming' ? 'info' : 'neutral'}>
                           {ev.status.toUpperCase()}
                         </Badge>
@@ -292,37 +387,29 @@ export default function EventsManagement() {
                         </div>
                       </td>
 
-                      <td>
-                        <span style={{ fontWeight: 700 }}>{ev.admin_count || 0}</span>
-                        <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}> admins</span>
-                      </td>
-
                       <td style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', gap: '6px' }}>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                           <button
                             onClick={() => handleManageEvent(ev)}
                             className="btn btn-primary btn-sm"
-                            title="Manage this event"
+                            title="Switch Context & Manage Passes"
                           >
-                            <ExternalLink size={14} />
-                            <span>Manage</span>
+                            <Building2 size={14} />
+                            <span>Select Event</span>
                           </button>
-
                           <button
                             onClick={() => handleOpenEdit(ev)}
                             className="btn btn-secondary btn-sm btn-icon"
-                            title="Edit Event Details"
+                            title="Edit Event"
                           >
                             <Edit2 size={14} />
                           </button>
-
                           <button
                             onClick={() => handleToggleStatus(ev)}
-                            className="btn btn-outline btn-sm btn-icon"
+                            className="btn btn-ghost btn-sm btn-icon"
                             title={ev.status === 'active' ? 'Deactivate Event' : 'Activate Event'}
-                            style={{ color: ev.status === 'active' ? 'var(--danger-accent)' : 'var(--success-accent)' }}
                           >
-                            <Power size={14} />
+                            <Power size={14} color={ev.status === 'active' ? 'var(--danger-500)' : 'var(--success-500)'} />
                           </button>
                         </div>
                       </td>
@@ -340,81 +427,123 @@ export default function EventsManagement() {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         title="Create New Event"
-        maxWidth="600px"
+        maxWidth="740px"
       >
         <form onSubmit={handleCreateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Name *</label>
-            <input
-              type="text"
-              placeholder="e.g. Summer Music Festival 2026"
-              value={eventName}
-              onChange={(e) => setEventName(e.target.value)}
-              required
-              style={{ width: '100%' }}
-            />
-          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '20px', alignItems: 'start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Raas Utsav 2026"
+                  value={eventName}
+                  onChange={(e) => setEventName(e.target.value)}
+                  required
+                  style={{ width: '100%' }}
+                />
+              </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Code *</label>
-              <input
-                type="text"
-                placeholder="e.g. MUSIC2026"
-                value={eventCode}
-                onChange={(e) => setEventCode(e.target.value.toUpperCase())}
-                required
-                style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: '100%' }}>
-                <option value="active">Active</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Code *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. RAAS2026"
+                    value={eventCode}
+                    onChange={(e) => setEventCode(e.target.value.toUpperCase())}
+                    required
+                    style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Status</label>
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: '100%' }}>
+                    <option value="active">Active</option>
+                    <option value="upcoming">Upcoming</option>
+                    <option value="completed">Completed</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Venue / Location</label>
-            <input
-              type="text"
-              placeholder="e.g. Grand Convention Center, Hall A & B"
-              value={venue}
-              onChange={(e) => setVenue(e.target.value)}
-              style={{ width: '100%' }}
-            />
-          </div>
+              {/* Barcode Format Selection (Requirement #5) */}
+              <div style={{ padding: '12px', backgroundColor: 'var(--bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Sticker Barcode Format:
+                </label>
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                    <input
+                      type="radio"
+                      name="createBarcodeType"
+                      value="QR_CODE"
+                      checked={barcodeType === 'QR_CODE'}
+                      onChange={(e) => setBarcodeType(e.target.value)}
+                    />
+                    <span>QR Code (2D)</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                    <input
+                      type="radio"
+                      name="createBarcodeType"
+                      value="CODE128"
+                      checked={barcodeType === 'CODE128'}
+                      onChange={(e) => setBarcodeType(e.target.value)}
+                    />
+                    <span>Code128 Barcode (1D)</span>
+                  </label>
+                </div>
+                <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px', fontSize: '11.5px' }}>
+                  Pass code text will always be printed bold beneath the code. Sticker size: 38mm × 50mm.
+                </small>
+              </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Start Date & Time *</label>
-              <input
-                type="datetime-local"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                required
-                style={{ width: '100%' }}
-              />
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Venue / Location</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Grand Convention Center, Hall A & B"
+                  value={venue}
+                  onChange={(e) => setVenue(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Start Date & Time *</label>
+                  <input
+                    type="datetime-local"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    required
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>End Date & Time *</label>
+                  <input
+                    type="datetime-local"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    required
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
             </div>
+
+            {/* Live 38mm x 50mm Sticker Preview */}
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>End Date & Time *</label>
-              <input
-                type="datetime-local"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                required
-                style={{ width: '100%' }}
-              />
+              <StickerPreview eventName={eventName || 'Event Name'} barcodeType={barcodeType} />
             </div>
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Description</label>
             <textarea
-              rows={3}
+              rows={2}
               placeholder="Event background, guidelines, and access instructions..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -438,79 +567,120 @@ export default function EventsManagement() {
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         title="Edit Event Details"
-        maxWidth="600px"
+        maxWidth="740px"
       >
         <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Name</label>
-            <input
-              type="text"
-              value={eventName}
-              onChange={(e) => setEventName(e.target.value)}
-              required
-              style={{ width: '100%' }}
-            />
-          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '20px', alignItems: 'start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Name</label>
+                <input
+                  type="text"
+                  value={eventName}
+                  onChange={(e) => setEventName(e.target.value)}
+                  required
+                  style={{ width: '100%' }}
+                />
+              </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Code</label>
-              <input
-                type="text"
-                value={eventCode}
-                onChange={(e) => setEventCode(e.target.value.toUpperCase())}
-                required
-                style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: '100%' }}>
-                <option value="active">Active</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="completed">Completed</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Code</label>
+                  <input
+                    type="text"
+                    value={eventCode}
+                    onChange={(e) => setEventCode(e.target.value.toUpperCase())}
+                    required
+                    style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Status</label>
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: '100%' }}>
+                    <option value="active">Active</option>
+                    <option value="upcoming">Upcoming</option>
+                    <option value="completed">Completed</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Venue</label>
-            <input
-              type="text"
-              value={venue}
-              onChange={(e) => setVenue(e.target.value)}
-              style={{ width: '100%' }}
-            />
-          </div>
+              {/* Barcode Format Selection (Requirement #5) */}
+              <div style={{ padding: '12px', backgroundColor: 'var(--bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Sticker Barcode Format:
+                </label>
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                    <input
+                      type="radio"
+                      name="editBarcodeType"
+                      value="QR_CODE"
+                      checked={barcodeType === 'QR_CODE'}
+                      onChange={(e) => setBarcodeType(e.target.value)}
+                    />
+                    <span>QR Code (2D)</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                    <input
+                      type="radio"
+                      name="editBarcodeType"
+                      value="CODE128"
+                      checked={barcodeType === 'CODE128'}
+                      onChange={(e) => setBarcodeType(e.target.value)}
+                    />
+                    <span>Code128 Barcode (1D)</span>
+                  </label>
+                </div>
+                <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px', fontSize: '11.5px' }}>
+                  Pass code text will always be printed bold beneath the code. Sticker size: 38mm × 50mm.
+                </small>
+              </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Start Date & Time</label>
-              <input
-                type="datetime-local"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                required
-                style={{ width: '100%' }}
-              />
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Venue</label>
+                <input
+                  type="text"
+                  value={venue}
+                  onChange={(e) => setVenue(e.target.value)}
+                  style={{ width: '100%' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Start Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    required
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>End Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    required
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
             </div>
+
+            {/* Live 38mm x 50mm Sticker Preview */}
             <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>End Date & Time</label>
-              <input
-                type="datetime-local"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                required
-                style={{ width: '100%' }}
-              />
+              <StickerPreview eventName={eventName || editingEvent?.event_name} barcodeType={barcodeType} />
             </div>
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Description</label>
             <textarea
-              rows={3}
+              rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               style={{ width: '100%' }}

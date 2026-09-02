@@ -11,11 +11,14 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useEvent } from '../context/EventContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
 
 export default function PassCategories() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'SUPERADMIN';
   const { events, selectedEvent } = useEvent();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -139,10 +142,12 @@ export default function PassCategories() {
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={handleOpenCreate} className="btn btn-primary">
-            <Plus size={16} />
-            <span>Create Category</span>
-          </button>
+          {isSuperAdmin && (
+            <button onClick={handleOpenCreate} className="btn btn-primary">
+              <Plus size={16} />
+              <span>Create Category</span>
+            </button>
+          )}
           <button onClick={fetchCategories} className="btn btn-outline btn-icon" title="Refresh">
             <RefreshCw size={16} />
           </button>
@@ -158,7 +163,7 @@ export default function PassCategories() {
                 <th>Internal Prefix</th>
                 <th>Validity Window</th>
                 <th>Daily Scans</th>
-                <th>Total Pass Inventory</th>
+                <th>Total Generated Passes</th>
                 <th>Printed / Used</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
@@ -173,7 +178,7 @@ export default function PassCategories() {
               ) : categories.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-                    No categories found for this event. Click "Create Category" to get started.
+                    {isSuperAdmin ? 'No categories found for this event. Click "Create Category" to get started.' : 'No pass categories found for this event.'}
                   </td>
                 </tr>
               ) : (
@@ -215,7 +220,12 @@ export default function PassCategories() {
                     </td>
 
                     <td>
-                      <div style={{ fontWeight: 700 }}>{Number(cat.total_passes_in_db || cat.total_quantity || 0).toLocaleString()} passes</div>
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {Number(cat.total_passes_in_db ?? 0).toLocaleString()} passes
+                      </div>
+                      <small style={{ color: 'var(--text-subtle)', fontSize: '11px' }}>
+                        Limit: {Number(cat.total_quantity || 0).toLocaleString()}
+                      </small>
                     </td>
 
                     <td>
@@ -225,13 +235,17 @@ export default function PassCategories() {
                     </td>
 
                     <td style={{ textAlign: 'right' }}>
-                      <button
-                        onClick={() => handleOpenEdit(cat)}
-                        className="btn btn-secondary btn-sm btn-icon"
-                        title="Edit Category"
-                      >
-                        <Edit2 size={14} />
-                      </button>
+                      {isSuperAdmin ? (
+                        <button
+                          onClick={() => handleOpenEdit(cat)}
+                          className="btn btn-secondary btn-sm btn-icon"
+                          title="Edit Category"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: 'var(--text-subtle)', fontStyle: 'italic' }}>View Only</span>
+                      )}
                     </td>
                   </tr>
                 ))

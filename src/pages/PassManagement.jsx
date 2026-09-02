@@ -166,8 +166,9 @@ export default function PassManagement() {
   };
 
   const handleOpenGenerate = () => {
-    setGenEventId(selectedEvent ? String(selectedEvent.id) : (events[0] ? String(events[0].id) : '1'));
-    setGenCategoryId(categories[0] ? String(categories[0].id) : '');
+    const evId = selectedEvent?.id ? String(selectedEvent.id) : (events[0]?.id ? String(events[0].id) : '1');
+    setGenEventId(evId);
+    setGenCategoryId(categories[0]?.id ? String(categories[0].id) : '');
     setGenQuantity(100);
     setShowGenerateModal(true);
   };

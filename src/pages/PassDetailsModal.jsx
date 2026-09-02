@@ -151,7 +151,7 @@ export default function PassDetailsModal({ passId, onClose, onRenew, onVoid, onR
             alignItems: 'center',
             gap: '12px'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
               <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Digital Scannable Code (Direct Gate Testing)
               </div>
@@ -159,9 +159,25 @@ export default function PassDetailsModal({ passId, onClose, onRenew, onVoid, onR
               <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-body)', padding: '2px', borderRadius: '6px' }}>
                 <button
                   type="button"
+                  onClick={() => setBarcodeFormat('QR')}
+                  style={{
+                    padding: '3px 10px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    borderRadius: '4px',
+                    border: 'none',
+                    backgroundColor: barcodeFormat === 'QR' ? 'var(--primary-600)' : 'transparent',
+                    color: barcodeFormat === 'QR' ? '#ffffff' : 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  QR Code
+                </button>
+                <button
+                  type="button"
                   onClick={() => setBarcodeFormat('CODE128')}
                   style={{
-                    padding: '3px 8px',
+                    padding: '3px 10px',
                     fontSize: '11px',
                     fontWeight: 700,
                     borderRadius: '4px',
@@ -175,33 +191,46 @@ export default function PassDetailsModal({ passId, onClose, onRenew, onVoid, onR
                 </button>
                 <button
                   type="button"
-                  onClick={() => setBarcodeFormat('QR')}
+                  onClick={() => setBarcodeFormat('CODE39')}
                   style={{
-                    padding: '3px 8px',
+                    padding: '3px 10px',
                     fontSize: '11px',
                     fontWeight: 700,
                     borderRadius: '4px',
                     border: 'none',
-                    backgroundColor: barcodeFormat === 'QR' ? 'var(--primary-600)' : 'transparent',
-                    color: barcodeFormat === 'QR' ? '#ffffff' : 'var(--text-muted)',
+                    backgroundColor: barcodeFormat === 'CODE39' ? 'var(--primary-600)' : 'transparent',
+                    color: barcodeFormat === 'CODE39' ? '#ffffff' : 'var(--text-muted)',
                     cursor: 'pointer'
                   }}
                 >
-                  QR Code
+                  Code 39
                 </button>
               </div>
             </div>
 
-            <div style={{ padding: '8px', backgroundColor: '#ffffff', borderRadius: '8px' }}>
+            <div style={{ padding: '12px 16px', backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <ScannableBarcode
                 value={pass.code}
                 type={barcodeFormat}
                 size="lg"
                 showText={true}
               />
+              <div style={{
+                marginTop: '8px',
+                padding: '4px 12px',
+                backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontWeight: 800,
+                fontFamily: 'var(--font-mono, monospace)',
+                color: 'var(--primary-700)',
+                letterSpacing: '1px'
+              }}>
+                PASS CODE: {pass.code}
+              </div>
             </div>
 
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
+            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', textAlign: 'center' }}>
               Point the Scanner App's camera directly at this screen to validate this pass at the gate.
             </div>
           </div>

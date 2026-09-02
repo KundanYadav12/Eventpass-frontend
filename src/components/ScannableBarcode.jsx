@@ -5,13 +5,13 @@ import QRCode from 'qrcode';
 /**
  * ScannableBarcode Component
  * 
- * Renders an exact, scannable digital Code 128 barcode or QR code for pass codes.
- * Optimized for camera scanner recognition off digital computer displays.
+ * Renders an exact, scannable digital Code 128 barcode, Code 39 barcode, or 2D QR code.
+ * Optimized for camera scanner recognition off digital computer displays and label print previews.
  */
 export default function ScannableBarcode({
   value,
-  type = 'CODE128', // 'CODE128' or 'QR'
-  size = 'md',      // 'sm' (table thumbnail), 'md', 'lg' (detail modal)
+  type = 'CODE128', // 'CODE128', 'CODE39', 'QR', 'QR_CODE'
+  size = 'md',      // 'sm' (table thumbnail), 'md', 'lg' (detail modal / preview)
   showText = true,
   className = '',
   style = {}
@@ -22,16 +22,18 @@ export default function ScannableBarcode({
   const isSmall = size === 'sm';
   const isLarge = size === 'lg';
 
+  const normalizedType = String(type || 'CODE128').toUpperCase().replace('_CODE', '');
+
   useEffect(() => {
     if (!value) return;
 
-    if (type === 'CODE128') {
+    if (normalizedType === 'CODE128' || normalizedType === '128') {
       if (svgRef.current) {
         try {
           JsBarcode(svgRef.current, String(value), {
             format: 'CODE128',
-            width: isSmall ? 1.2 : (isLarge ? 2.2 : 1.8),
-            height: isSmall ? 26 : (isLarge ? 70 : 45),
+            width: isSmall ? 1.2 : (isLarge ? 2.0 : 1.8),
+            height: isSmall ? 26 : (isLarge ? 80 : 45),
             displayValue: showText && !isSmall,
             fontSize: isLarge ? 16 : 12,
             font: 'monospace',
@@ -43,13 +45,35 @@ export default function ScannableBarcode({
             valid: () => {}
           });
         } catch (err) {
-          console.warn('[Barcode] JsBarcode render error:', err);
+          console.warn('[Barcode] JsBarcode CODE128 error:', err);
         }
       }
-    } else if (type === 'QR') {
+    } else if (normalizedType === 'CODE39' || normalizedType === '39') {
+      if (svgRef.current) {
+        try {
+          JsBarcode(svgRef.current, String(value), {
+            format: 'CODE39',
+            width: isSmall ? 1.0 : (isLarge ? 1.6 : 1.4),
+            height: isSmall ? 26 : (isLarge ? 80 : 45),
+            displayValue: showText && !isSmall,
+            fontSize: isLarge ? 15 : 12,
+            font: 'monospace',
+            fontOptions: 'bold',
+            textMargin: 4,
+            margin: isSmall ? 4 : 8,
+            background: '#ffffff',
+            lineColor: '#000000',
+            valid: () => {}
+          });
+        } catch (err) {
+          console.warn('[Barcode] JsBarcode CODE39 error:', err);
+        }
+      }
+    } else {
+      // Default: QR Code
       if (canvasRef.current) {
         QRCode.toCanvas(canvasRef.current, String(value), {
-          width: isSmall ? 40 : (isLarge ? 180 : 90),
+          width: isSmall ? 44 : (isLarge ? 150 : 95),
           margin: isSmall ? 1 : 2,
           color: {
             dark: '#000000',
@@ -61,9 +85,11 @@ export default function ScannableBarcode({
         });
       }
     }
-  }, [value, type, size, showText]);
+  }, [value, normalizedType, size, showText]);
 
   if (!value) return null;
+
+  const isQr = normalizedType === 'QR';
 
   return (
     <div
@@ -80,12 +106,27 @@ export default function ScannableBarcode({
         boxShadow: isSmall ? 'none' : '0 2px 6px rgba(0,0,0,0.06)',
         ...style
       }}
-      title={`Scannable Code 128: ${value}`}
+      title={`Scannable ${normalizedType}: ${value}`}
     >
-      {type === 'CODE128' ? (
-        <svg ref={svgRef} style={{ display: 'block', maxWidth: '100%' }} />
+      {isQr ? (
+        <>
+          <canvas ref={canvasRef} style={{ display: 'block' }} />
+          {showText && !isSmall && (
+            <div style={{
+              fontFamily: 'var(--font-mono, monospace)',
+              fontSize: isLarge ? '17px' : '13px',
+              fontWeight: 900,
+              letterSpacing: '1.5px',
+              color: '#0f172a',
+              marginTop: '4px',
+              textAlign: 'center'
+            }}>
+              {value}
+            </div>
+          )}
+        </>
       ) : (
-        <canvas ref={canvasRef} style={{ display: 'block' }} />
+        <svg ref={svgRef} style={{ display: 'block', maxWidth: '100%' }} />
       )}
     </div>
   );

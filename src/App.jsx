@@ -51,7 +51,7 @@ function ProtectedLayout() {
               {isSuperAdmin && <Route path="/events" element={<EventsManagement />} />}
               <Route path="/passes" element={<PassManagement />} />
               <Route path="/categories" element={<PassCategories />} />
-              <Route path="/print-batches" element={<PrintBatches />} />
+              {isSuperAdmin && <Route path="/print-batches" element={<PrintBatches />} />}
               <Route path="/scan-history" element={<ScanHistory />} />
               {isSuperAdmin && <Route path="/users" element={<UserManagement />} />}
               {isSuperAdmin && <Route path="/messages" element={<MessagesConfig />} />}

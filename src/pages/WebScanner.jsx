@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   QrCode,
@@ -8,6 +8,7 @@ import {
   Volume2,
   VolumeX,
   Camera,
+  CameraOff,
   RefreshCw,
   Sliders,
   ChevronRight,
@@ -17,11 +18,14 @@ import {
   ArrowLeft,
   Building2,
   Tag,
-  Zap
+  Zap,
+  RotateCw,
+  Info
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
+import { useSettings } from '../context/SettingsContext';
 
 export default function WebScanner() {
   const [code, setCode] = useState('');
@@ -32,13 +36,35 @@ export default function WebScanner() {
   const [recentScans, setRecentScans] = useState([]);
   const [showResultOverlay, setShowResultOverlay] = useState(false);
 
+  // Live Camera State
+  const [cameraActive, setCameraActive] = useState(false);
+  const [facingMode, setFacingMode] = useState('environment'); // 'environment' or 'user'
+  const [cameraError, setCameraError] = useState(null);
+  const [isSecure, setIsSecure] = useState(true);
+
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const scanIntervalRef = useRef(null);
   const inputRef = useRef(null);
   const scanLockRef = useRef(false);
+  const lastScannedCodeRef = useRef('');
+  const lastScanTimeRef = useRef(0);
+
   const toast = useToast();
   const navigate = useNavigate();
   const { isDark, toggleTheme } = useTheme();
+  const { platformName } = useSettings();
 
-  // Audio Synthesizer for instant feedback sounds (Web Audio API)
+  // Check secure context on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const isHttps = window.location.protocol === 'https:';
+      setIsSecure(isHttps || isLocalhost);
+    }
+  }, []);
+
+  // Web Audio Synthesizer for instant feedback sounds
   const playSound = (type) => {
     if (!soundEnabled) return;
     try {
@@ -47,7 +73,6 @@ export default function WebScanner() {
       const ctx = new AudioCtx();
 
       if (type === 'approved') {
-        // High pleasant ascending dual-tone chime
         const osc1 = ctx.createOscillator();
         const osc2 = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -68,7 +93,6 @@ export default function WebScanner() {
         osc1.start();
         osc1.stop(ctx.currentTime + 0.35);
       } else {
-        // Low descending buzz tone for Denied
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
 
@@ -88,6 +112,131 @@ export default function WebScanner() {
     } catch (e) {
       console.warn('Audio playback error:', e);
     }
+  };
+
+  // Start Camera Stream
+  const startCamera = async () => {
+    setCameraError(null);
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraError('Camera access is not supported on this browser or requires an HTTPS connection.');
+      return;
+    }
+
+    try {
+      // Stop any existing stream
+      stopCamera();
+
+      const constraints = {
+        video: {
+          facingMode: { ideal: facingMode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.setAttribute('muted', 'true');
+        await videoRef.current.play();
+      }
+
+      setCameraActive(true);
+      startBarcodeScannerLoop();
+      toast.success(`Camera activated (${facingMode === 'environment' ? 'Rear' : 'Front'})`);
+    } catch (err) {
+      console.error('[Scanner] Camera error:', err);
+      let errMsg = err.message || 'Failed to access camera';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errMsg = 'Camera permission was denied. Please allow camera permissions in your browser address bar.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        errMsg = 'No video camera device detected on this hardware.';
+      }
+      setCameraError(errMsg);
+      setCameraActive(false);
+    }
+  };
+
+  // Stop Camera Stream
+  const stopCamera = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
+  };
+
+  // Flip Camera (Rear <-> Front)
+  const toggleCameraFacing = () => {
+    const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(nextMode);
+  };
+
+  useEffect(() => {
+    if (cameraActive) {
+      startCamera();
+    }
+  }, [facingMode]);
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
+  // Barcode Detection Loop (BarcodeDetector API or fallback)
+  const startBarcodeScannerLoop = () => {
+    if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+
+    const hasBarcodeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+    let detector = null;
+
+    if (hasBarcodeDetector) {
+      try {
+        detector = new window.BarcodeDetector({
+          formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'ean_8', 'data_matrix']
+        });
+      } catch (e) {
+        console.warn('BarcodeDetector format init error:', e);
+      }
+    }
+
+    scanIntervalRef.current = setInterval(async () => {
+      if (!videoRef.current || videoRef.current.readyState < 2 || scanLockRef.current) return;
+
+      if (detector) {
+        try {
+          const barcodes = await detector.detect(videoRef.current);
+          if (barcodes && barcodes.length > 0) {
+            const rawValue = barcodes[0].rawValue;
+            if (rawValue) {
+              const now = Date.now();
+              // Prevent scanning the exact same code within 2.5 seconds
+              if (rawValue === lastScannedCodeRef.current && now - lastScanTimeRef.current < 2500) {
+                return;
+              }
+              lastScannedCodeRef.current = rawValue;
+              lastScanTimeRef.current = now;
+              handleScanSubmit(null, rawValue);
+            }
+          }
+        } catch (e) {
+          // Ignore frame decode errors
+        }
+      }
+    }, 250);
   };
 
   const handleScanSubmit = async (e, forcedCode = null) => {
@@ -138,7 +287,7 @@ export default function WebScanner() {
       setTimeout(() => {
         scanLockRef.current = false;
         if (inputRef.current) inputRef.current.focus();
-      }, 400);
+      }, 500);
     }
   };
 
@@ -151,10 +300,10 @@ export default function WebScanner() {
     <div style={{
       minHeight: '100vh',
       backgroundColor: 'var(--bg-app)',
-      padding: '24px 16px',
+      padding: '16px',
       position: 'relative'
     }}>
-      {/* Full-Screen Scan Result Overlay Popup (Requirement #19, #20, #21) */}
+      {/* Full-Screen Scan Result Overlay Popup */}
       {showResultOverlay && lastResult && (
         <div
           onClick={dismissOverlay}
@@ -168,25 +317,25 @@ export default function WebScanner() {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '30px',
+            padding: '24px',
             textAlign: 'center',
             cursor: 'pointer',
             animation: 'fadeIn 0.15s ease'
           }}
         >
-          <div style={{ maxWidth: '640px', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+          <div style={{ maxWidth: '600px', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
             {lastResult.result === 'approved' ? (
-              <CheckCircle2 size={110} style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.25))' }} />
+              <CheckCircle2 size={100} style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.25))' }} />
             ) : (
-              <XCircle size={110} style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.25))' }} />
+              <XCircle size={100} style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.25))' }} />
             )}
 
             <div>
-              <div style={{ fontSize: '36px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.5px', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
+              <div style={{ fontSize: '32px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.5px', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
                 {lastResult.message || (lastResult.result === 'approved' ? 'ENTRY APPROVED' : 'ENTRY DENIED')}
               </div>
               {lastResult.reason && (
-                <div style={{ fontSize: '18px', marginTop: '8px', opacity: 0.95 }}>
+                <div style={{ fontSize: '16px', marginTop: '6px', opacity: 0.95 }}>
                   {lastResult.reason}
                 </div>
               )}
@@ -196,49 +345,50 @@ export default function WebScanner() {
             <div style={{
               backgroundColor: 'rgba(0, 0, 0, 0.28)',
               backdropFilter: 'blur(10px)',
-              borderRadius: '16px',
-              padding: '20px 28px',
+              borderRadius: '14px',
+              padding: '18px 22px',
               width: '100%',
               display: 'flex',
               flexDirection: 'column',
-              gap: '10px',
+              gap: '8px',
               textAlign: 'left',
-              border: '1px solid rgba(255, 255, 255, 0.2)'
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              fontSize: '13.5px'
             }}>
               {lastResult.event && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255, 255, 255, 0.15)', paddingBottom: '6px' }}>
-                  <span style={{ opacity: 0.8 }}>Event Context:</span>
-                  <strong style={{ fontSize: '15px' }}>{lastResult.event.name}</strong>
+                  <span style={{ opacity: 0.8 }}>Event:</span>
+                  <strong style={{ fontSize: '14.5px' }}>{lastResult.event.name}</strong>
                 </div>
               )}
               {lastResult.category && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ opacity: 0.8 }}>Pass Category:</span>
+                  <span style={{ opacity: 0.8 }}>Category:</span>
                   <strong>{lastResult.category.name}</strong>
                 </div>
               )}
               {lastResult.pass && (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ opacity: 0.8 }}>7-Digit Pass Code:</span>
-                    <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '20px', letterSpacing: '1px' }}>
+                    <span style={{ opacity: 0.8 }}>Pass Code:</span>
+                    <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '18px', letterSpacing: '1px' }}>
                       {lastResult.pass.code}
                     </strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ opacity: 0.8 }}>Total Scans Recorded:</span>
+                    <span style={{ opacity: 0.8 }}>Total Scans:</span>
                     <strong>{lastResult.pass.scanCount} scans</strong>
                   </div>
                 </>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ opacity: 0.8 }}>Scan Timestamp:</span>
+                <span style={{ opacity: 0.8 }}>Timestamp:</span>
                 <span>{new Date().toLocaleTimeString()}</span>
               </div>
             </div>
 
-            <div style={{ fontSize: '14px', opacity: 0.85, marginTop: '8px' }}>
-              Tap screen or press Enter to dismiss and scan next pass
+            <div style={{ fontSize: '13px', opacity: 0.85, marginTop: '4px' }}>
+              Tap anywhere or press Enter to scan next pass
             </div>
           </div>
         </div>
@@ -246,15 +396,15 @@ export default function WebScanner() {
 
       {/* Main Scanner Container */}
       <div style={{ maxWidth: '640px', margin: '0 auto' }}>
-        {/* Top Bar with Clear Back Button */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        {/* Top Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <button
             onClick={() => navigate('/')}
             className="btn btn-secondary"
-            style={{ padding: '8px 16px', fontWeight: 700, gap: '8px', boxShadow: 'var(--shadow-sm)' }}
+            style={{ padding: '8px 14px', fontWeight: 700, gap: '6px', fontSize: '13px' }}
           >
             <ArrowLeft size={16} />
-            <span>← Back to Dashboard</span>
+            <span>Dashboard</span>
           </button>
 
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -276,7 +426,7 @@ export default function WebScanner() {
         </div>
 
         {/* Gate Selector */}
-        <div className="card" style={{ marginBottom: '18px', padding: '16px 20px' }}>
+        <div className="card" style={{ marginBottom: '16px', padding: '14px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Sliders size={16} color="var(--primary-600)" />
@@ -285,7 +435,7 @@ export default function WebScanner() {
             <select
               value={deviceId}
               onChange={(e) => setDeviceId(e.target.value)}
-              style={{ padding: '6px 14px', fontWeight: 700 }}
+              style={{ padding: '6px 12px', fontWeight: 700 }}
             >
               <option value="GATE-01">GATE-01 (Main Entrance Left)</option>
               <option value="GATE-02">GATE-02 (Main Entrance Right)</option>
@@ -295,68 +445,149 @@ export default function WebScanner() {
           </div>
         </div>
 
-        {/* Animated Scanner Viewfinder Card */}
-        <div className="card" style={{ padding: '28px', marginBottom: '20px', textAlign: 'center' }}>
+        {/* Insecure Context Warning Banner if applicable */}
+        {!isSecure && (
+          <div className="alert-banner" style={{ backgroundColor: 'var(--warning-bg)', borderColor: 'var(--warning-border)', marginBottom: '16px', padding: '12px 16px', borderRadius: 'var(--radius-md)', display: 'flex', gap: '10px' }}>
+            <Info size={20} color="var(--warning-500)" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: '12.5px', color: 'var(--text-primary)' }}>
+              <strong>HTTPS Notice:</strong> Mobile browsers require an HTTPS secure context (e.g. <code>https://eventgen.duckdns.org</code>) to activate device cameras.
+            </div>
+          </div>
+        )}
+
+        {/* Camera Scanner Viewfinder Card */}
+        <div className="card" style={{ padding: '20px', marginBottom: '18px', textAlign: 'center' }}>
+          
+          {/* Live Video / Placeholder Box */}
           <div style={{
-            width: '240px',
-            height: '160px',
+            width: '100%',
+            maxWidth: '360px',
+            height: '240px',
             borderRadius: '16px',
             border: '2px dashed var(--primary-400)',
-            margin: '0 auto 20px auto',
+            margin: '0 auto 16px auto',
             position: 'relative',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: 'var(--bg-surface-hover)',
+            backgroundColor: '#000000',
             overflow: 'hidden'
           }}>
-            {/* Animated Laser Line */}
-            <div className="viewfinder-laser" />
+            {/* Live Video Element */}
+            <video
+              ref={videoRef}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: cameraActive ? 'block' : 'none'
+              }}
+              playsInline
+              autoPlay
+              muted
+            />
 
-            <Camera size={38} color="var(--primary-600)" style={{ marginBottom: '6px', opacity: 0.9 }} />
-            <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--primary-600)', letterSpacing: '1px', textTransform: 'uppercase' }}>
-              Align Barcode / QR Code
-            </div>
+            {/* Target Laser Overlay */}
+            {cameraActive && <div className="viewfinder-laser" />}
+
+            {/* Inactive Camera Placeholder */}
+            {!cameraActive && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: '#94A3B8', padding: '16px' }}>
+                <Camera size={44} color="var(--primary-500)" />
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#FFFFFF' }}>
+                  Camera is Inactive
+                </div>
+                <div style={{ fontSize: '11.5px', maxWidth: '240px' }}>
+                  Tap "Open Camera Scanner" below to scan pass barcodes in real-time
+                </div>
+              </div>
+            )}
           </div>
 
-          <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '6px' }}>Ready to Scan Pass</h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
-            Scan ticket with handheld scanner or enter 7-digit pass code
-          </p>
+          {/* Camera Error Message */}
+          {cameraError && (
+            <div style={{
+              backgroundColor: 'var(--danger-bg)',
+              color: 'var(--danger-text)',
+              border: '1px solid var(--danger-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
+              fontSize: '12.5px',
+              marginBottom: '14px',
+              textAlign: 'left'
+            }}>
+              ⚠️ {cameraError}
+            </div>
+          )}
 
-          <form onSubmit={(e) => handleScanSubmit(e)} style={{ display: 'flex', gap: '10px' }}>
+          {/* Camera Controls Bar */}
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '18px', flexWrap: 'wrap' }}>
+            {!cameraActive ? (
+              <button
+                onClick={startCamera}
+                className="btn btn-primary"
+                style={{ padding: '8px 20px', gap: '8px', fontWeight: 700 }}
+              >
+                <Camera size={18} />
+                <span>Open Camera Scanner</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={stopCamera}
+                  className="btn btn-danger btn-sm"
+                  style={{ gap: '6px' }}
+                >
+                  <CameraOff size={16} />
+                  <span>Stop Camera</span>
+                </button>
+
+                <button
+                  onClick={toggleCameraFacing}
+                  className="btn btn-outline btn-sm"
+                  style={{ gap: '6px' }}
+                  title="Switch Front/Rear Camera"
+                >
+                  <RotateCw size={16} />
+                  <span>Flip Camera</span>
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Manual Input Form */}
+          <form onSubmit={(e) => handleScanSubmit(e)} style={{ display: 'flex', gap: '8px' }}>
             <input
               ref={inputRef}
               type="text"
-              placeholder="e.g. TESTNOW, 55KDBD2"
+              placeholder="Enter 7-digit code (e.g. 55KDBD2)"
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              autoFocus
               style={{
                 flex: 1,
-                fontSize: '20px',
+                fontSize: '17px',
                 fontWeight: 800,
                 fontFamily: 'var(--font-mono)',
                 textAlign: 'center',
-                letterSpacing: '2px'
+                letterSpacing: '1.5px'
               }}
             />
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !code.trim()}
               className="btn btn-primary"
-              style={{ padding: '0 24px', fontWeight: 700 }}
+              style={{ padding: '0 18px', fontWeight: 700 }}
             >
-              <span>{loading ? 'Verifying...' : 'Verify Pass'}</span>
+              <span>{loading ? '...' : 'Verify'}</span>
             </button>
           </form>
         </div>
 
         {/* Multi-Event Quick Test Presets */}
-        <div className="card" style={{ marginBottom: '20px', padding: '18px 20px' }}>
-          <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)', marginBottom: '12px' }}>
-            QA Quick Test Passes (Instant Simulation):
+        <div className="card" style={{ marginBottom: '18px', padding: '16px' }}>
+          <div style={{ fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.6px', color: 'var(--text-muted)', marginBottom: '10px' }}>
+            Quick Test Passes (Simulation):
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
@@ -365,7 +596,7 @@ export default function WebScanner() {
               className="btn btn-primary btn-sm"
               style={{ fontSize: '11.5px', justifyContent: 'flex-start', background: 'var(--success-gradient)' }}
             >
-              ★ Live Valid Pass (Today)
+              ★ Valid Pass (Today)
             </button>
 
             <button
@@ -373,7 +604,7 @@ export default function WebScanner() {
               className="btn btn-secondary btn-sm"
               style={{ fontSize: '11.5px', justifyContent: 'flex-start' }}
             >
-              Event 1: Unused Daily
+              Unused Daily Pass
             </button>
 
             <button
@@ -381,7 +612,7 @@ export default function WebScanner() {
               className="btn btn-secondary btn-sm"
               style={{ fontSize: '11.5px', justifyContent: 'flex-start' }}
             >
-              Event 1: Used Daily
+              Used Daily Pass
             </button>
 
             <button
@@ -389,15 +620,7 @@ export default function WebScanner() {
               className="btn btn-secondary btn-sm"
               style={{ fontSize: '11.5px', justifyContent: 'flex-start' }}
             >
-              Event 1: All-Season
-            </button>
-
-            <button
-              onClick={() => handleScanSubmit(null, 'TESTMF1')}
-              className="btn btn-secondary btn-sm"
-              style={{ fontSize: '11.5px', justifyContent: 'flex-start' }}
-            >
-              Event 2: Music Fest
+              All-Season Pass
             </button>
 
             <button
@@ -418,11 +641,11 @@ export default function WebScanner() {
           </div>
         </div>
 
-        {/* Recent Scans Feed on this Device */}
+        {/* Recent Scans Feed */}
         {recentScans.length > 0 && (
-          <div className="card" style={{ padding: '18px 20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: 800, marginBottom: '12px' }}>
-              Device Scan History ({recentScans.length})
+          <div className="card" style={{ padding: '16px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 800, marginBottom: '10px' }}>
+              Recent Scans ({recentScans.length})
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -433,11 +656,11 @@ export default function WebScanner() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '10px 14px',
+                    padding: '10px 12px',
                     borderRadius: 'var(--radius-md)',
                     backgroundColor: 'var(--bg-surface-hover)',
                     border: '1px solid var(--border-color)',
-                    fontSize: '13px'
+                    fontSize: '12.5px'
                   }}
                 >
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -446,17 +669,17 @@ export default function WebScanner() {
                       <span style={{ color: 'var(--text-muted)' }}>• {s.message}</span>
                     </div>
                     {s.eventName && (
-                      <div style={{ fontSize: '11.5px', color: 'var(--primary-600)', fontWeight: 600 }}>
+                      <div style={{ fontSize: '11px', color: 'var(--primary-600)', fontWeight: 600 }}>
                         {s.eventName} • {s.categoryName}
                       </div>
                     )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '11.5px', color: 'var(--text-subtle)' }}>{s.time}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-subtle)' }}>{s.time}</span>
                     <span style={{
                       padding: '2px 8px',
                       borderRadius: 'var(--radius-full)',
-                      fontSize: '11px',
+                      fontSize: '10.5px',
                       fontWeight: 800,
                       backgroundColor: s.result === 'approved' ? 'var(--success-bg)' : 'var(--danger-bg)',
                       color: s.result === 'approved' ? 'var(--success-text)' : 'var(--danger-text)'

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Lock, Mail, Sparkles, ShieldCheck, ArrowRight, Sun, Moon } from 'lucide-react';
+import { Lock, Mail, Sparkles, ArrowRight, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import { useSettings } from '../context/SettingsContext';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -12,6 +13,7 @@ export default function Login() {
 
   const { login } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+  const { platformName } = useSettings();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -25,18 +27,13 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      toast.success('Welcome back to EventGen!');
+      toast.success(`Welcome back to ${platformName}!`);
       navigate('/');
     } catch (err) {
       toast.error(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
-  };
-
-  const quickFill = (userEmail, userPass) => {
-    setEmail(userEmail);
-    setPassword(userPass);
   };
 
   return (
@@ -76,7 +73,7 @@ export default function Login() {
           }}>
             <Sparkles size={28} />
           </div>
-          <h1 style={{ fontSize: '26px', fontWeight: 800, letterSpacing: '-0.5px' }}>EventGen Portal</h1>
+          <h1 style={{ fontSize: '26px', fontWeight: 800, letterSpacing: '-0.5px' }}>{platformName} Portal</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '4px' }}>
             Event Pass & Barcode Ticketing Management
           </p>
@@ -98,6 +95,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   style={{ width: '100%', paddingLeft: '38px' }}
                   required
+                  autoFocus
                 />
               </div>
             </div>
@@ -132,35 +130,10 @@ export default function Login() {
               <ArrowRight size={16} />
             </button>
           </form>
-
-          {/* Quick Login Helpers for Demo / QA */}
-          <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '24px', paddingTop: '18px' }}>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, textAlign: 'center', marginBottom: '10px' }}>
-              QUICK SIGN-IN FOR TESTING:
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => quickFill('superadmin@eventgen.com', 'SuperAdmin@2026!')}
-                className="btn btn-secondary btn-sm"
-                style={{ fontSize: '12px' }}
-              >
-                <ShieldCheck size={14} color="var(--primary-600)" /> SuperAdmin
-              </button>
-              <button
-                type="button"
-                onClick={() => quickFill('admin@eventgen.com', 'Admin@2026!')}
-                className="btn btn-secondary btn-sm"
-                style={{ fontSize: '12px' }}
-              >
-                Gate Admin
-              </button>
-            </div>
-          </div>
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '12.5px', color: 'var(--text-subtle)' }}>
-          Production Target: <strong>https://eventgen.duckdns.org</strong> • Port 5006
+          Secure Authentication • {platformName} Multi-Event Engine
         </div>
       </div>
     </div>
