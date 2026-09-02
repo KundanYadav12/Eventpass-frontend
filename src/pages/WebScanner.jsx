@@ -26,6 +26,11 @@ import { api } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { useSettings } from '../context/SettingsContext';
+import {
+  formatDateTimeIST,
+  formatTimeWithSecondsIST,
+  formatDateIST
+} from '../utils/dateUtil';
 
 export default function WebScanner() {
   const [code, setCode] = useState('');
@@ -267,7 +272,7 @@ export default function WebScanner() {
           message: res.message,
           eventName: res.event?.name,
           categoryName: res.category?.name,
-          time: new Date().toLocaleTimeString()
+          time: formatTimeWithSecondsIST(new Date())
         },
         ...prev.slice(0, 14)
       ]);
@@ -311,7 +316,7 @@ export default function WebScanner() {
             position: 'fixed',
             inset: 0,
             zIndex: 999,
-            backgroundColor: lastResult.result === 'approved' ? '#059669' : '#DC2626',
+            backgroundColor: lastResult.result === 'approved' ? '#059669' : lastResult.result === 'expired' ? '#D97706' : '#DC2626',
             color: 'white',
             display: 'flex',
             flexDirection: 'column',
@@ -367,6 +372,24 @@ export default function WebScanner() {
                   <strong>{lastResult.category.name}</strong>
                 </div>
               )}
+              {lastResult.category?.scanBehavior && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ opacity: 0.8 }}>Scan Rule:</span>
+                  <strong>{lastResult.category.scanBehavior === 'RENEWABLE' ? 'Renewable (Daily Reset)' : 'One-Time Use (Single Entry)'}</strong>
+                </div>
+              )}
+              {lastResult.category?.scanBehavior === 'RENEWABLE' && lastResult.category?.renewalTime && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ opacity: 0.8 }}>Renewal Reset Time:</span>
+                  <strong>{lastResult.category.renewalTime} IST</strong>
+                </div>
+              )}
+              {lastResult.category?.scanBehavior === 'RENEWABLE' && (lastResult.category?.renewalActiveFrom || lastResult.category?.renewalActiveUntil) && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ opacity: 0.8 }}>Active Window (IST):</span>
+                  <strong>{formatDateIST(lastResult.category.renewalActiveFrom)} – {formatDateIST(lastResult.category.renewalActiveUntil)}</strong>
+                </div>
+              )}
               {lastResult.pass && (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -381,9 +404,21 @@ export default function WebScanner() {
                   </div>
                 </>
               )}
+              {(lastResult.firstScannedAt || lastResult.pass?.firstScannedAt) && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ opacity: 0.8 }}>First Scanned (IST):</span>
+                  <span>{formatDateTimeIST(lastResult.firstScannedAt || lastResult.pass?.firstScannedAt)}</span>
+                </div>
+              )}
+              {(lastResult.lastScannedAt || lastResult.pass?.lastScannedAt) && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ opacity: 0.8 }}>Last Scanned (IST):</span>
+                  <span>{formatDateTimeIST(lastResult.lastScannedAt || lastResult.pass?.lastScannedAt)}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ opacity: 0.8 }}>Timestamp:</span>
-                <span>{new Date().toLocaleTimeString()}</span>
+                <span style={{ opacity: 0.8 }}>Scan Timestamp (IST):</span>
+                <span>{formatDateTimeIST(new Date())}</span>
               </div>
             </div>
 
