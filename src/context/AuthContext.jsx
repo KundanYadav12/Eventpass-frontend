@@ -57,8 +57,23 @@ export function AuthProvider({ children }) {
 
   const isSuperAdmin = user?.role === 'SUPERADMIN';
 
+  const hasPermission = (permissionCode, targetEventId = null) => {
+    if (!user) return false;
+    if (user.role === 'SUPERADMIN') return true;
+
+    if (targetEventId && user.eventPermissions && user.eventPermissions[targetEventId]) {
+      return user.eventPermissions[targetEventId].includes(permissionCode);
+    }
+
+    if (user.eventId && user.eventPermissions && user.eventPermissions[user.eventId]) {
+      return user.eventPermissions[user.eventId].includes(permissionCode);
+    }
+
+    return Array.isArray(user.permissions) && user.permissions.includes(permissionCode);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isSuperAdmin, isAuthenticated: !!user, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, isSuperAdmin, hasPermission, isAuthenticated: !!user, loading }}>
       {children}
     </AuthContext.Provider>
   );

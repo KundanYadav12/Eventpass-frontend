@@ -5,6 +5,9 @@ import {
   Calendar,
   Ticket,
   Tags,
+  Palette,
+  CreditCard,
+  Send,
   Printer,
   History,
   Users,
@@ -18,15 +21,20 @@ import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 
 export default function Sidebar({ isOpen, onClose }) {
-  const { user } = useAuth();
+  const { user, isSuperAdmin, hasPermission } = useAuth();
   const { platformName } = useSettings();
-  const isSuperAdmin = user?.role === 'SUPERADMIN';
+
+  const canViewPassStyles = isSuperAdmin || hasPermission('pass_styles.view') || hasPermission('pass_styles.use');
+  const canBilling = isSuperAdmin || hasPermission('billing.create') || hasPermission('passes.generate');
 
   const navItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
     ...(isSuperAdmin ? [{ to: '/events', label: 'Events Management', icon: Calendar }] : []),
     { to: '/passes', label: 'Pass Inventory', icon: Ticket },
     { to: '/categories', label: 'Pass Categories', icon: Tags },
+    ...(canViewPassStyles ? [{ to: '/pass-styles', label: 'Pass Styles', icon: Palette }] : []),
+    ...(canBilling ? [{ to: '/billing', label: 'Billing & Issue', icon: CreditCard }] : []),
+    { to: '/delivery-settings', label: 'Email & WhatsApp', icon: Send },
     ...(isSuperAdmin ? [{ to: '/print-batches', label: 'Print Batches', icon: Printer }] : []),
     { to: '/scan-history', label: 'Scan History', icon: History },
     ...(isSuperAdmin

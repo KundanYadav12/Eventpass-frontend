@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useEvent } from '../context/EventContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Pagination from '../components/Pagination';
 import Badge from '../components/Badge';
@@ -28,7 +29,9 @@ import RenewPassModal from './RenewPassModal';
 import ScannableBarcode from '../components/ScannableBarcode';
 
 export default function PassManagement() {
+  const { user, isSuperAdmin, hasPermission } = useAuth();
   const { events, selectedEvent } = useEvent();
+  const canGenerate = isSuperAdmin || hasPermission('passes.generate');
   const [passes, setPasses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [pagination, setPagination] = useState({
@@ -214,10 +217,12 @@ export default function PassManagement() {
         </div>
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button onClick={handleOpenGenerate} className="btn btn-primary">
-            <Plus size={16} />
-            <span>Generate Passes</span>
-          </button>
+          {canGenerate && (
+            <button onClick={handleOpenGenerate} className="btn btn-primary">
+              <Plus size={16} />
+              <span>Generate Passes</span>
+            </button>
+          )}
 
           {selectedPassIds.length > 0 && (
             <button

@@ -427,17 +427,17 @@ export default function EventsManagement() {
       <Modal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        title="Create New Event"
-        maxWidth="740px"
+        title="Create New Event Ecosystem"
+        maxWidth="800px"
       >
-        <form onSubmit={handleCreateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '20px', alignItems: 'start' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Name *</label>
+        <form onSubmit={handleCreateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 240px', gap: '24px', alignItems: 'start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label">Event Name *</label>
                 <input
                   type="text"
-                  placeholder="e.g. Raas Utsav 2026"
+                  placeholder="e.g. Raas Utsav 2026, Tech Innovation Summit"
                   value={eventName}
                   onChange={(e) => setEventName(e.target.value)}
                   required
@@ -445,9 +445,9 @@ export default function EventsManagement() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Code *</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label">Event Code *</label>
                   <input
                     type="text"
                     placeholder="e.g. RAAS2026"
@@ -457,8 +457,8 @@ export default function EventsManagement() {
                     style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Status</label>
+                <div className="form-group">
+                  <label className="form-label">Status</label>
                   <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: '100%' }}>
                     <option value="active">Active</option>
                     <option value="upcoming">Upcoming</option>
@@ -468,13 +468,13 @@ export default function EventsManagement() {
                 </div>
               </div>
 
-              {/* Barcode Format Selection (Requirement #5) */}
-              <div style={{ padding: '12px', backgroundColor: 'var(--bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+              {/* Barcode Format Selection */}
+              <div style={{ padding: '14px 16px', backgroundColor: 'var(--bg-surface-hover)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                <label className="form-label" style={{ marginBottom: '8px' }}>
                   Sticker Barcode Format:
                 </label>
-                <div style={{ display: 'flex', gap: '16px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
                     <input
                       type="radio"
                       name="createBarcodeType"
@@ -484,7 +484,7 @@ export default function EventsManagement() {
                     />
                     <span>QR Code (2D)</span>
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
                     <input
                       type="radio"
                       name="createBarcodeType"
@@ -495,13 +495,13 @@ export default function EventsManagement() {
                     <span>Code128 Barcode (1D)</span>
                   </label>
                 </div>
-                <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px', fontSize: '11.5px' }}>
+                <small className="form-help">
                   Pass code text will always be printed bold beneath the code. Sticker size: 38mm × 50mm.
                 </small>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Venue / Location</label>
+              <div className="form-group">
+                <label className="form-label">Venue / Location</label>
                 <input
                   type="text"
                   placeholder="e.g. Grand Convention Center, Hall A & B"
@@ -511,9 +511,9 @@ export default function EventsManagement() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Start Date & Time *</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label">Start Date & Time *</label>
                   <input
                     type="datetime-local"
                     value={startDate}
@@ -522,8 +522,8 @@ export default function EventsManagement() {
                     style={{ width: '100%' }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>End Date & Time *</label>
+                <div className="form-group">
+                  <label className="form-label">End Date & Time *</label>
                   <input
                     type="datetime-local"
                     value={endDate}
@@ -541,8 +541,8 @@ export default function EventsManagement() {
             </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Description</label>
+          <div className="form-group">
+            <label className="form-label">Description</label>
             <textarea
               rows={2}
               placeholder="Event background, guidelines, and access instructions..."
@@ -552,7 +552,7 @@ export default function EventsManagement() {
             />
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+          <div className="modal-footer">
             <button type="button" onClick={() => setShowCreateModal(false)} className="btn btn-secondary">
               Cancel
             </button>
@@ -568,13 +568,13 @@ export default function EventsManagement() {
         isOpen={showEditModal}
         onClose={() => setShowEditModal(false)}
         title="Edit Event Details"
-        maxWidth="740px"
+        maxWidth="800px"
       >
-        <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: '20px', alignItems: 'start' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Name</label>
+        <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 240px', gap: '24px', alignItems: 'start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label">Event Name</label>
                 <input
                   type="text"
                   value={eventName}
@@ -584,9 +584,9 @@ export default function EventsManagement() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event Code</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label">Event Code</label>
                   <input
                     type="text"
                     value={eventCode}
@@ -595,8 +595,8 @@ export default function EventsManagement() {
                     style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Status</label>
+                <div className="form-group">
+                  <label className="form-label">Status</label>
                   <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: '100%' }}>
                     <option value="active">Active</option>
                     <option value="upcoming">Upcoming</option>
@@ -606,13 +606,13 @@ export default function EventsManagement() {
                 </div>
               </div>
 
-              {/* Barcode Format Selection (Requirement #5) */}
-              <div style={{ padding: '12px', backgroundColor: 'var(--bg-surface-hover)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+              {/* Barcode Format Selection */}
+              <div style={{ padding: '14px 16px', backgroundColor: 'var(--bg-surface-hover)', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                <label className="form-label" style={{ marginBottom: '8px' }}>
                   Sticker Barcode Format:
                 </label>
-                <div style={{ display: 'flex', gap: '16px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
                     <input
                       type="radio"
                       name="editBarcodeType"
@@ -622,7 +622,7 @@ export default function EventsManagement() {
                     />
                     <span>QR Code (2D)</span>
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
                     <input
                       type="radio"
                       name="editBarcodeType"
@@ -633,13 +633,13 @@ export default function EventsManagement() {
                     <span>Code128 Barcode (1D)</span>
                   </label>
                 </div>
-                <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '6px', fontSize: '11.5px' }}>
+                <small className="form-help">
                   Pass code text will always be printed bold beneath the code. Sticker size: 38mm × 50mm.
                 </small>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Venue</label>
+              <div className="form-group">
+                <label className="form-label">Venue</label>
                 <input
                   type="text"
                   value={venue}
@@ -648,9 +648,9 @@ export default function EventsManagement() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Start Date & Time</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label">Start Date & Time (IST)</label>
                   <input
                     type="datetime-local"
                     value={startDate}
@@ -659,8 +659,8 @@ export default function EventsManagement() {
                     style={{ width: '100%' }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>End Date & Time</label>
+                <div className="form-group">
+                  <label className="form-label">End Date & Time (IST)</label>
                   <input
                     type="datetime-local"
                     value={endDate}
@@ -672,14 +672,14 @@ export default function EventsManagement() {
               </div>
             </div>
 
-            {/* Live 38mm x 50mm Sticker Preview */}
+            {/* Live Preview */}
             <div>
               <StickerPreview eventName={eventName || editingEvent?.event_name} barcodeType={barcodeType} />
             </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Description</label>
+          <div className="form-group">
+            <label className="form-label">Description</label>
             <textarea
               rows={2}
               value={description}
@@ -688,7 +688,7 @@ export default function EventsManagement() {
             />
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+          <div className="modal-footer">
             <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary">
               Cancel
             </button>

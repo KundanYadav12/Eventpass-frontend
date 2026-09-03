@@ -28,8 +28,8 @@ import {
 } from '../utils/dateUtil';
 
 export default function PassCategories() {
-  const { user } = useAuth();
-  const isSuperAdmin = user?.role === 'SUPERADMIN';
+  const { user, isSuperAdmin, hasPermission } = useAuth();
+  const canCreateCategory = isSuperAdmin || hasPermission('categories.create');
   const { events, selectedEvent } = useEvent();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -173,7 +173,7 @@ export default function PassCategories() {
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
-          {isSuperAdmin && (
+          {canCreateCategory && (
             <button onClick={handleOpenCreate} className="btn btn-primary">
               <Plus size={16} />
               <span>Create Category</span>
@@ -324,16 +324,16 @@ export default function PassCategories() {
         </div>
       </div>
 
-      {/* Create / Edit Modal */}
+      {/* Create / Edit Category Modal with Comfortable Spacing */}
       <Modal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
-        title={editingCategory ? 'Edit Category & Renewal Rules' : 'Create Pass Category'}
-        maxWidth="580px"
+        title={editingCategory ? `Edit Category & Renewal Rules — ${editingCategory.name}` : 'Create New Pass Category'}
+        maxWidth="680px"
       >
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Event *</label>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div className="form-group">
+            <label className="form-label">Assigned Event Context *</label>
             <select
               value={eventId}
               onChange={(e) => setEventId(e.target.value)}
@@ -347,9 +347,9 @@ export default function PassCategories() {
             </select>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Category Name *</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="form-group">
+              <label className="form-label">Category Name *</label>
               <input
                 type="text"
                 placeholder="e.g. VIP Access Pass"
@@ -359,8 +359,8 @@ export default function PassCategories() {
                 style={{ width: '100%' }}
               />
             </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>System Code *</label>
+            <div className="form-group">
+              <label className="form-label">System Code *</label>
               <input
                 type="text"
                 placeholder="e.g. vip_access"
@@ -373,8 +373,8 @@ export default function PassCategories() {
             </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+          <div className="form-group">
+            <label className="form-label">
               Internal Category Prefix (Optional)
             </label>
             <input
@@ -384,14 +384,14 @@ export default function PassCategories() {
               onChange={(e) => setCategoryPrefix(e.target.value.toUpperCase())}
               style={{ width: '100%', fontFamily: 'var(--font-mono)' }}
             />
-            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
+            <div className="form-help">
               Used internally for categorizing. The printed pass code itself remains strictly the unique 7-digit code.
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Valid From (IST) *</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="form-group">
+              <label className="form-label">Valid From (IST) *</label>
               <input
                 type="datetime-local"
                 value={validFrom}
@@ -400,8 +400,8 @@ export default function PassCategories() {
                 style={{ width: '100%' }}
               />
             </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Valid Until (IST) *</label>
+            <div className="form-group">
+              <label className="form-label">Valid Until (IST) *</label>
               <input
                 type="datetime-local"
                 value={validUntil}
@@ -415,20 +415,20 @@ export default function PassCategories() {
           {/* SCAN BEHAVIOR & RENEWAL RULES SECTION */}
           <div style={{
             border: '1px solid var(--border-color, #E2E8F0)',
-            borderRadius: '8px',
-            padding: '14px',
+            borderRadius: '12px',
+            padding: '18px 20px',
             backgroundColor: 'var(--bg-subtle, #F8FAFC)'
           }}>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-primary)' }}>
+            <label style={{ display: 'block', fontSize: '13.5px', fontWeight: 800, marginBottom: '12px', color: 'var(--text-primary)' }}>
               🎯 Scan Behavior Mode *
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               <label style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                padding: '10px 12px',
-                borderRadius: '6px',
+                gap: '10px',
+                padding: '12px 14px',
+                borderRadius: '8px',
                 border: scanBehavior === 'ONE_TIME' ? '2px solid var(--primary-600, #2563EB)' : '1px solid #CBD5E1',
                 backgroundColor: scanBehavior === 'ONE_TIME' ? '#EFF6FF' : '#FFFFFF',
                 cursor: 'pointer'
@@ -441,17 +441,17 @@ export default function PassCategories() {
                   onChange={() => setScanBehavior('ONE_TIME')}
                 />
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: 700 }}>One-Time Use</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Permanent expiry after 1 scan</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700 }}>One-Time Use</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Permanent expiry after 1 scan</div>
                 </div>
               </label>
 
               <label style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                padding: '10px 12px',
-                borderRadius: '6px',
+                gap: '10px',
+                padding: '12px 14px',
+                borderRadius: '8px',
                 border: scanBehavior === 'RENEWABLE' ? '2px solid var(--primary-600, #2563EB)' : '1px solid #CBD5E1',
                 backgroundColor: scanBehavior === 'RENEWABLE' ? '#EFF6FF' : '#FFFFFF',
                 cursor: 'pointer'
@@ -464,24 +464,24 @@ export default function PassCategories() {
                   onChange={() => setScanBehavior('RENEWABLE')}
                 />
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: 700 }}>Renewable</div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Scheduled daily/recurring reset</div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700 }}>Renewable</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>Scheduled daily/recurring reset</div>
                 </div>
               </label>
             </div>
 
-            {/* CONDITIONAL RENEWAL FIELDS (REVEALED WHEN RENEWABLE IS SELECTED) */}
+            {/* CONDITIONAL RENEWAL FIELDS */}
             {scanBehavior === 'RENEWABLE' && (
               <div style={{
-                marginTop: '12px',
-                paddingTop: '12px',
+                marginTop: '14px',
+                paddingTop: '14px',
                 borderTop: '1px dashed #CBD5E1',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '12px'
+                gap: '14px'
               }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, marginBottom: '4px' }}>
+                  <label className="form-label">
                     ⏰ Renewal Time (IST Clock Time) *
                   </label>
                   <input
@@ -491,14 +491,14 @@ export default function PassCategories() {
                     required={scanBehavior === 'RENEWABLE'}
                     style={{ width: '100%', maxWidth: '200px' }}
                   />
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  <div className="form-help">
                     The exact time in Indian Standard Time (IST) when the daily scan lock resets (e.g. 01:00 AM).
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, marginBottom: '4px' }}>
+                    <label className="form-label">
                       Renewal Active From (IST) *
                     </label>
                     <input
@@ -510,7 +510,7 @@ export default function PassCategories() {
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, marginBottom: '4px' }}>
+                    <label className="form-label">
                       Renewal Active Until (IST) *
                     </label>
                     <input
@@ -522,16 +522,16 @@ export default function PassCategories() {
                     />
                   </div>
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                <div className="form-help">
                   During this date range, passes unlock daily at {formatClockTime(renewalTime)} IST. Outside this window, passes expire.
                 </div>
               </div>
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Daily Scan Limit</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="form-group">
+              <label className="form-label">Daily Scan Limit</label>
               <input
                 type="number"
                 min={1}
@@ -541,8 +541,8 @@ export default function PassCategories() {
                 style={{ width: '100%' }}
               />
             </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>Price ($)</label>
+            <div className="form-group">
+              <label className="form-label">Price (₹)</label>
               <input
                 type="number"
                 min={0}
@@ -554,7 +554,7 @@ export default function PassCategories() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+          <div className="modal-footer">
             <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
               Cancel
             </button>

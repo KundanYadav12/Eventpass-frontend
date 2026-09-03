@@ -10,6 +10,9 @@ import Dashboard from './pages/Dashboard';
 import EventsManagement from './pages/EventsManagement';
 import PassManagement from './pages/PassManagement';
 import PassCategories from './pages/PassCategories';
+import PassStyles from './pages/PassStyles';
+import CustomerBilling from './pages/CustomerBilling';
+import EventDeliverySettings from './pages/EventDeliverySettings';
 import PrintBatches from './pages/PrintBatches';
 import ScanHistory from './pages/ScanHistory';
 import UserManagement from './pages/UserManagement';
@@ -22,7 +25,7 @@ import ResetPassword from './pages/ResetPassword';
 import WebScanner from './pages/WebScanner';
 
 function ProtectedLayout() {
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isAuthenticated, user, isSuperAdmin, hasPermission, loading } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (loading) {
@@ -37,7 +40,8 @@ function ProtectedLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  const isSuperAdmin = user?.role === 'SUPERADMIN';
+  const canViewPassStyles = isSuperAdmin || hasPermission('pass_styles.view') || hasPermission('pass_styles.use');
+  const canBilling = isSuperAdmin || hasPermission('billing.create') || hasPermission('passes.generate');
 
   return (
     <EventProvider>
@@ -51,6 +55,9 @@ function ProtectedLayout() {
               {isSuperAdmin && <Route path="/events" element={<EventsManagement />} />}
               <Route path="/passes" element={<PassManagement />} />
               <Route path="/categories" element={<PassCategories />} />
+              {canViewPassStyles && <Route path="/pass-styles" element={<PassStyles />} />}
+              {canBilling && <Route path="/billing" element={<CustomerBilling />} />}
+              <Route path="/delivery-settings" element={<EventDeliverySettings />} />
               {isSuperAdmin && <Route path="/print-batches" element={<PrintBatches />} />}
               <Route path="/scan-history" element={<ScanHistory />} />
               {isSuperAdmin && <Route path="/users" element={<UserManagement />} />}
