@@ -134,10 +134,16 @@ export default function PassDesignerModal({
   };
 
   // Element Property Updates
-  const updateSelectedElement = (prop, value) => {
+  const updateSelectedElement = (propOrObj, value) => {
     if (!selectedElementId) return;
     setElements(prev =>
-      prev.map(el => (el.id === selectedElementId ? { ...el, [prop]: value } : el))
+      prev.map(el => {
+        if (el.id !== selectedElementId) return el;
+        if (typeof propOrObj === 'object' && propOrObj !== null) {
+          return { ...el, ...propOrObj };
+        }
+        return { ...el, [propOrObj]: value };
+      })
     );
   };
 
@@ -360,15 +366,17 @@ export default function PassDesignerModal({
                       </div>
                     ) : el.type === 'qrcode' ? (
                       <div style={{
-                        width: `${width}px`,
-                        height: `${width}px`,
+                        width: '100%',
+                        height: '100%',
+                        minHeight: `${height}px`,
                         backgroundColor: '#FFFFFF',
                         borderRadius: '4px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        padding: '4px'
                       }}>
-                        <QrCode size={40} color="#000000" />
+                        <QrCode size={Math.max(20, Math.min(width, height) - 8)} color="#000000" />
                       </div>
                     ) : (
                       <span style={{
@@ -528,7 +536,7 @@ export default function PassDesignerModal({
                 )}
 
                 {/* Barcode / QR Code Type Selector */}
-                {(selectedEl.type === 'barcode' || selectedEl.type === 'qrcode') && (
+                {(selectedEl.type === 'barcode' || selectedEl.type === 'qrcode' || selectedEl.field === 'barcode' || selectedEl.field === 'qrcode') && (
                   <div>
                     <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>
                       Barcode Format
@@ -536,15 +544,32 @@ export default function PassDesignerModal({
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button
                         type="button"
-                        onClick={() => updateSelectedElement('type', 'barcode')}
-                        className={`btn btn-sm ${selectedEl.type === 'barcode' ? 'btn-primary' : 'btn-outline'}`}
+                        onClick={() => {
+                          updateSelectedElement({
+                            type: 'barcode',
+                            barcode_format: 'CODE128',
+                            label: 'Barcode / Code 128',
+                            width: selectedEl.width && selectedEl.width >= 300 ? selectedEl.width : 500,
+                            height: selectedEl.height && selectedEl.height <= 140 ? selectedEl.height : 120
+                          });
+                        }}
+                        className={`btn btn-sm ${selectedEl.type !== 'qrcode' ? 'btn-primary' : 'btn-outline'}`}
                         style={{ flex: 1 }}
                       >
                         Code 128
                       </button>
                       <button
                         type="button"
-                        onClick={() => updateSelectedElement('type', 'qrcode')}
+                        onClick={() => {
+                          const dim = selectedEl.width && selectedEl.width <= 400 && selectedEl.width >= 100 ? selectedEl.width : 250;
+                          updateSelectedElement({
+                            type: 'qrcode',
+                            barcode_format: 'QR_CODE',
+                            label: 'QR Code',
+                            width: dim,
+                            height: dim
+                          });
+                        }}
                         className={`btn btn-sm ${selectedEl.type === 'qrcode' ? 'btn-primary' : 'btn-outline'}`}
                         style={{ flex: 1 }}
                       >

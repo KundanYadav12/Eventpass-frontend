@@ -12,6 +12,7 @@ import PassManagement from './pages/PassManagement';
 import PassCategories from './pages/PassCategories';
 import PassStyles from './pages/PassStyles';
 import CustomerBilling from './pages/CustomerBilling';
+import SalesReport from './pages/SalesReport';
 import EventDeliverySettings from './pages/EventDeliverySettings';
 import PrintBatches from './pages/PrintBatches';
 import ScanHistory from './pages/ScanHistory';
@@ -42,6 +43,7 @@ function ProtectedLayout() {
 
   const canViewPassStyles = isSuperAdmin || hasPermission('pass_styles.view') || hasPermission('pass_styles.use');
   const canBilling = isSuperAdmin || hasPermission('billing.create') || hasPermission('passes.generate');
+  const canViewSales = isSuperAdmin || hasPermission('sales.view') || hasPermission('billing.create');
 
   return (
     <EventProvider>
@@ -57,6 +59,7 @@ function ProtectedLayout() {
               <Route path="/categories" element={<PassCategories />} />
               {canViewPassStyles && <Route path="/pass-styles" element={<PassStyles />} />}
               {canBilling && <Route path="/billing" element={<CustomerBilling />} />}
+              {canViewSales && <Route path="/sales" element={<SalesReport />} />}
               <Route path="/delivery-settings" element={<EventDeliverySettings />} />
               {isSuperAdmin && <Route path="/print-batches" element={<PrintBatches />} />}
               <Route path="/scan-history" element={<ScanHistory />} />

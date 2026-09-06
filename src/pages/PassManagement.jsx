@@ -7,15 +7,22 @@ import {
   Eye,
   RotateCw,
   Ban,
-  CheckSquare,
-  Square,
   SlidersHorizontal,
   ChevronDown,
   Layers,
   Sparkles,
   Plus,
   Copy,
-  Check
+  Check,
+  Share2,
+  Download,
+  Mail,
+  Phone,
+  User,
+  Clock,
+  CheckCircle2,
+  Calendar,
+  X
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useEvent } from '../context/EventContext';
@@ -26,7 +33,9 @@ import Badge from '../components/Badge';
 import Modal from '../components/Modal';
 import PassDetailsModal from './PassDetailsModal';
 import RenewPassModal from './RenewPassModal';
+import ResharePassModal from './ResharePassModal';
 import ScannableBarcode from '../components/ScannableBarcode';
+import { formatDateIST, formatTimeIST, formatDateTimeIST } from '../utils/dateUtil';
 
 export default function PassManagement() {
   const { user, isSuperAdmin, hasPermission } = useAuth();
@@ -45,17 +54,25 @@ export default function PassManagement() {
   const [search, setSearch] = useState('');
   const [passType, setPassType] = useState('all');
   const [status, setStatus] = useState('all');
+  const [sharingMethod, setSharingMethod] = useState('all');
   const [printed, setPrinted] = useState('all');
   const [usageState, setUsageState] = useState('all');
   const [validityState, setValidityState] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [sharedFrom, setSharedFrom] = useState('');
+  const [sharedTo, setSharedTo] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Modals & Selection State
   const [selectedPassIds, setSelectedPassIds] = useState([]);
   const [activePassDetailsId, setActivePassDetailsId] = useState(null);
+  const [reshareTargetPass, setReshareTargetPass] = useState(null);
   const [renewTargetPass, setRenewTargetPass] = useState(null);
   const [showBulkRenewModal, setShowBulkRenewModal] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [copiedCode, setCopiedCode] = useState(null);
+  const [exportingExcel, setExportingExcel] = useState(false);
 
   // Generate Form State
   const [genEventId, setGenEventId] = useState('');
@@ -66,24 +83,32 @@ export default function PassManagement() {
   const [loading, setLoading] = useState(false);
   const toast = useToast();
 
+  const buildQueryParams = (page = 1) => {
+    return new URLSearchParams({
+      page,
+      limit: pagination.limit,
+      ...(selectedEvent ? { eventId: selectedEvent.id } : {}),
+      ...(search ? { search } : {}),
+      ...(passType !== 'all' ? { passType } : {}),
+      ...(status !== 'all' ? { status } : {}),
+      ...(sharingMethod !== 'all' ? { sharingMethod } : {}),
+      ...(printed !== 'all' ? { printed } : {}),
+      ...(usageState !== 'all' ? { usageState } : {}),
+      ...(validityState !== 'all' ? { validityState } : {}),
+      ...(dateFrom ? { dateFrom } : {}),
+      ...(dateTo ? { dateTo } : {}),
+      ...(sharedFrom ? { sharedFrom } : {}),
+      ...(sharedTo ? { sharedTo } : {})
+    });
+  };
+
   const fetchPasses = async (page = 1) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page,
-        limit: pagination.limit,
-        ...(selectedEvent ? { eventId: selectedEvent.id } : {}),
-        ...(search ? { search } : {}),
-        ...(passType !== 'all' ? { passType } : {}),
-        ...(status !== 'all' ? { status } : {}),
-        ...(printed !== 'all' ? { printed } : {}),
-        ...(usageState !== 'all' ? { usageState } : {}),
-        ...(validityState !== 'all' ? { validityState } : {})
-      });
-
+      const params = buildQueryParams(page);
       const res = await api.get(`/passes?${params.toString()}`);
       if (res.success) {
-        setPasses(res.passes);
+        setPasses(res.passes || []);
         setPagination(res.pagination);
       }
     } catch (err) {
@@ -98,7 +123,7 @@ export default function PassManagement() {
       const url = selectedEvent ? `/categories?eventId=${selectedEvent.id}` : '/categories';
       const res = await api.get(url);
       if (res.success) {
-        setCategories(res.data);
+        setCategories(res.data || []);
       }
     } catch (e) {
       // Ignore
@@ -109,11 +134,61 @@ export default function PassManagement() {
     fetchPasses(1);
     fetchCategories();
     setSelectedPassIds([]);
-  }, [selectedEvent, passType, status, printed, usageState, validityState, pagination.limit]);
+  }, [
+    selectedEvent, passType, status, sharingMethod, printed,
+    usageState, validityState, dateFrom, dateTo, sharedFrom, sharedTo, pagination.limit
+  ]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     fetchPasses(1);
+  };
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setPassType('all');
+    setStatus('all');
+    setSharingMethod('all');
+    setPrinted('all');
+    setUsageState('all');
+    setValidityState('all');
+    setDateFrom('');
+    setDateTo('');
+    setSharedFrom('');
+    setSharedTo('');
+    fetchPasses(1);
+  };
+
+  const handleExportExcel = async () => {
+    setExportingExcel(true);
+    try {
+      const params = buildQueryParams(1);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5006/api/passes/export-excel?${params.toString()}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Excel export failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `PassInventory_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Pass Inventory Excel exported successfully!');
+    } catch (err) {
+      toast.error('Failed to download Excel file');
+    } finally {
+      setExportingExcel(false);
+    }
   };
 
   const handleSelectAll = (e) => {
@@ -150,21 +225,6 @@ export default function PassManagement() {
       }
     } catch (err) {
       toast.error(err.message || 'Failed to void pass');
-    }
-  };
-
-  const handleReissuePass = async (id) => {
-    if (!window.confirm('Reissuing will assign a NEW 7-character pass code and invalidate the old ticket barcode. Proceed?')) {
-      return;
-    }
-    try {
-      const res = await api.post(`/passes/${id}/reissue`, { reason: 'Admin reissue request' });
-      if (res.success) {
-        toast.success(res.message);
-        fetchPasses(pagination.page);
-      }
-    } catch (err) {
-      toast.error(err.message || 'Failed to reissue pass');
     }
   };
 
@@ -205,18 +265,30 @@ export default function PassManagement() {
   };
 
   return (
-    <div style={{ padding: '24px 32px', maxWidth: '1440px', margin: '0 auto' }}>
+    <div style={{ padding: '24px 32px', maxWidth: '1560px', margin: '0 auto' }}>
       {/* Top Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Pass Inventory & Lifecycle</h1>
+          <h1 style={{ fontSize: '24px', fontWeight: 800 }}>Pass Inventory & Customer Lifecycle</h1>
           <p style={{ fontSize: '13.5px', color: 'var(--text-muted)' }}>
-            Search, filter, inspect timelines, renew, and manage 7-character passes
+            Search, filter, track customer communication history, reshare passes, and inspect IST scan activity
             {selectedEvent && <span> for <strong>{selectedEvent.event_name}</strong></span>}
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Export Excel Button */}
+          <button
+            onClick={handleExportExcel}
+            disabled={exportingExcel || loading}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700 }}
+            title="Download filtered dataset in .xlsx format"
+          >
+            <Download size={15} />
+            <span>{exportingExcel ? 'Exporting...' : 'Export Excel (.xlsx)'}</span>
+          </button>
+
           {canGenerate && (
             <button onClick={handleOpenGenerate} className="btn btn-primary">
               <Plus size={16} />
@@ -224,7 +296,7 @@ export default function PassManagement() {
             </button>
           )}
 
-          {selectedPassIds.length > 0 && (
+          {selectedPassIds.length > 0 && isSuperAdmin && (
             <button
               onClick={() => setShowBulkRenewModal(true)}
               className="btn btn-secondary"
@@ -299,11 +371,12 @@ export default function PassManagement() {
       {/* Filter & Search Toolbar */}
       <div className="card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
         <form onSubmit={handleSearchSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Main Search Row */}
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: '260px', position: 'relative' }}>
+            <div style={{ flex: 1, minWidth: '280px', position: 'relative' }}>
               <input
                 type="text"
-                placeholder="Search by 7-character Pass Code (e.g. 55KDBD2) or ID..."
+                placeholder="Search by Pass Code (e.g. 55KDBD2), Customer Name, Email, WhatsApp Phone, or Bill #..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{ width: '100%', paddingLeft: '38px' }}
@@ -314,17 +387,29 @@ export default function PassManagement() {
             <button type="submit" className="btn btn-primary" style={{ padding: '0 22px' }}>
               Search
             </button>
-            {search && (
+
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className={`btn ${showAdvancedFilters ? 'btn-primary' : 'btn-outline'}`}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <SlidersHorizontal size={15} />
+              <span>{showAdvancedFilters ? 'Hide Filters' : 'More Filters'}</span>
+            </button>
+
+            {(search || status !== 'all' || sharingMethod !== 'all' || printed !== 'all' || usageState !== 'all' || validityState !== 'all' || dateFrom || dateTo || sharedFrom || sharedTo) && (
               <button
                 type="button"
-                onClick={() => { setSearch(''); fetchPasses(1); }}
+                onClick={handleResetFilters}
                 className="btn btn-secondary"
               >
-                Clear
+                Reset All
               </button>
             )}
           </div>
 
+          {/* Core Dropdown Filters */}
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-muted)' }}>
               <Filter size={14} />
@@ -332,11 +417,25 @@ export default function PassManagement() {
             </div>
 
             <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: '6px 10px', fontSize: '13px' }}>
-              <option value="all">All Statuses</option>
+              <option value="all">All Pass Statuses</option>
               <option value="active">Active</option>
               <option value="used">Used</option>
               <option value="expired">Expired</option>
               <option value="void">Void</option>
+            </select>
+
+            <select value={sharingMethod} onChange={(e) => setSharingMethod(e.target.value)} style={{ padding: '6px 10px', fontSize: '13px' }}>
+              <option value="all">All Sharing Channels</option>
+              <option value="EMAIL">Shared via Email</option>
+              <option value="WHATSAPP">Shared via WhatsApp</option>
+              <option value="BOTH">Shared via Both</option>
+              <option value="NONE">Not Shared (Direct / Batch)</option>
+            </select>
+
+            <select value={usageState} onChange={(e) => setUsageState(e.target.value)} style={{ padding: '6px 10px', fontSize: '13px' }}>
+              <option value="all">All Gate Usage</option>
+              <option value="unused">Unused (0 scans)</option>
+              <option value="used">Used (≥1 scans)</option>
             </select>
 
             <select value={printed} onChange={(e) => setPrinted(e.target.value)} style={{ padding: '6px 10px', fontSize: '13px' }}>
@@ -345,39 +444,92 @@ export default function PassManagement() {
               <option value="false">Unprinted</option>
             </select>
 
-            <select value={usageState} onChange={(e) => setUsageState(e.target.value)} style={{ padding: '6px 10px', fontSize: '13px' }}>
-              <option value="all">All Usage States</option>
-              <option value="unused">Unused (0 scans)</option>
-              <option value="used">Used (≥1 scans)</option>
-            </select>
-
             <select value={validityState} onChange={(e) => setValidityState(e.target.value)} style={{ padding: '6px 10px', fontSize: '13px' }}>
-              <option value="all">All Validity</option>
+              <option value="all">All Validity Windows</option>
               <option value="valid">Currently Valid</option>
-              <option value="expired">Expired Date</option>
+              <option value="expired">Expired Window</option>
             </select>
           </div>
+
+          {/* Advanced Date Range Filters Collapsible */}
+          {showAdvancedFilters && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '14px',
+              backgroundColor: 'var(--bg-surface-hover, #F8FAFC)',
+              padding: '14px 16px',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color)',
+              marginTop: '4px'
+            }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                  Pass Validity Window (IST Date Range)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    style={{ padding: '6px 8px', fontSize: '12.5px', width: '100%' }}
+                  />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>to</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    style={{ padding: '6px 8px', fontSize: '12.5px', width: '100%' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                  Customer Shared / Reshared Date (IST Date Range)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="date"
+                    value={sharedFrom}
+                    onChange={(e) => setSharedFrom(e.target.value)}
+                    style={{ padding: '6px 8px', fontSize: '12.5px', width: '100%' }}
+                  />
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>to</span>
+                  <input
+                    type="date"
+                    value={sharedTo}
+                    onChange={(e) => setSharedTo(e.target.value)}
+                    style={{ padding: '6px 8px', fontSize: '12.5px', width: '100%' }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </form>
       </div>
 
-      {/* Main Passes Table */}
+      {/* Main Passes Table with Full Customer Details */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="table-responsive">
           <table className="table">
             <thead>
               <tr>
-                <th style={{ width: '40px' }}>
+                <th style={{ width: '38px' }}>
                   <input
                     type="checkbox"
                     checked={passes.length > 0 && selectedPassIds.length === passes.length}
                     onChange={handleSelectAll}
                   />
                 </th>
-                <th>Pass Code (7-Digit)</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Valid Dates</th>
-                <th>Scan Usage</th>
+                <th>Pass Code (7-Char)</th>
+                <th>Customer / Buyer Details</th>
+                <th>Category & Event</th>
+                <th>Price & Bill</th>
+                <th>Sharing Channel</th>
+                <th>Shared Date (IST)</th>
+                <th>Scan Status</th>
+                <th>Scan Usage (IST)</th>
                 <th>Print State</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
@@ -385,13 +537,13 @@ export default function PassManagement() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
-                    Loading passes...
+                  <td colSpan={11} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                    Loading pass inventory...
                   </td>
                 </tr>
               ) : passes.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                  <td colSpan={11} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                     No passes found matching your filter criteria.
                   </td>
                 </tr>
@@ -409,15 +561,15 @@ export default function PassManagement() {
                         />
                       </td>
 
-                      {/* 7-Character Pass Code with 1-Click Copy & Digital Scannable Barcode */}
+                      {/* 1. 7-Character Pass Code + Copy + Thumbnail */}
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <button
                                 onClick={() => setActivePassDetailsId(pass.id)}
                                 className="pass-code-pill"
-                                title="Click to view pass details & scannable barcode"
+                                title="Click to view lifecycle timeline & barcode"
                               >
                                 <span>{pass.code}</span>
                               </button>
@@ -425,10 +577,10 @@ export default function PassManagement() {
                               <button
                                 onClick={(e) => handleCopyCode(pass.code, e)}
                                 className="btn btn-outline btn-icon"
-                                style={{ width: '26px', height: '26px', border: 'none', background: 'transparent' }}
+                                style={{ width: '24px', height: '24px', border: 'none', background: 'transparent' }}
                                 title="Copy 7-digit code"
                               >
-                                {isCopied ? <Check size={14} color="var(--success-accent)" /> : <Copy size={13} color="var(--text-muted)" />}
+                                {isCopied ? <Check size={13} color="var(--success-accent)" /> : <Copy size={12} color="var(--text-muted)" />}
                               </button>
                             </div>
                             <div style={{ fontSize: '11px', color: 'var(--text-subtle)', marginTop: '2px' }}>
@@ -436,36 +588,116 @@ export default function PassManagement() {
                             </div>
                           </div>
 
-                          {/* Scannable Barcode Thumbnail */}
                           <div
                             onClick={() => setActivePassDetailsId(pass.id)}
                             style={{ cursor: 'pointer', transition: 'transform 0.15s ease' }}
                             onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.04)'}
                             onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                            title="Click to view high-res scannable barcode"
+                            title="Click to view digital scannable barcode"
                           >
                             <ScannableBarcode value={pass.code} type="CODE128" size="sm" showText={false} />
                           </div>
                         </div>
                       </td>
 
+                      {/* 2. Customer / Buyer Name, Email & WhatsApp Number */}
                       <td>
-                        <div style={{ fontWeight: 700, fontSize: '13.5px' }}>{pass.category_name || pass.code_type}</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <div style={{ fontWeight: 700, fontSize: '13.5px', color: 'var(--text-primary)' }}>
+                            {pass.customer_name || '—'}
+                          </div>
+                          {pass.customer_email && (
+                            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Mail size={11} />
+                              <span>{pass.customer_email}</span>
+                            </div>
+                          )}
+                          {pass.customer_phone && (
+                            <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Phone size={11} />
+                              <span>{pass.customer_phone}</span>
+                            </div>
+                          )}
+                          {pass.sponsor_name && (
+                            <div style={{ fontSize: '10.5px', color: '#D97706', fontWeight: 600 }}>
+                              ★ {pass.sponsor_name}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* 3. Category & Event */}
+                      <td>
+                        <div style={{ fontWeight: 700, fontSize: '13px' }}>
+                          {pass.category_name || pass.code_type}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          {pass.event_name || 'Event 2026'}
+                        </div>
                         {pass.category_prefix && (
                           <span style={{
-                            fontSize: '10.5px',
+                            fontSize: '10px',
                             fontFamily: 'var(--font-mono)',
                             color: 'var(--primary-700)',
                             backgroundColor: 'var(--primary-50)',
-                            padding: '1px 6px',
+                            padding: '1px 5px',
                             borderRadius: '4px',
-                            fontWeight: 700
+                            fontWeight: 700,
+                            display: 'inline-block',
+                            marginTop: '2px'
                           }}>
                             TAG: {pass.category_prefix}
                           </span>
                         )}
                       </td>
 
+                      {/* 4. Price & Bill # */}
+                      <td>
+                        <div style={{ fontWeight: 800, fontSize: '13px', color: 'var(--text-primary)' }}>
+                          ₹{parseFloat(pass.category_price || pass.total_amount || 0).toFixed(2)}
+                        </div>
+                        {pass.bill_number ? (
+                          <div style={{ fontSize: '11px', fontFamily: 'monospace', color: 'var(--primary-600)' }}>
+                            {pass.bill_number}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '11px', color: 'var(--text-subtle)' }}>Direct Issue</div>
+                        )}
+                      </td>
+
+                      {/* 5. Sharing Method Badge */}
+                      <td>
+                        <Badge variant={
+                          pass.sharing_method === 'EMAIL' ? 'info' :
+                          pass.sharing_method === 'WHATSAPP' ? 'success' :
+                          pass.sharing_method === 'BOTH' ? 'primary' : 'neutral'
+                        }>
+                          {pass.sharing_method || 'NONE'}
+                        </Badge>
+                      </td>
+
+                      {/* 6. Shared Date (IST) & Reshare Count */}
+                      <td>
+                        {pass.last_shared_at ? (
+                          <div>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {formatDateIST(pass.last_shared_at)}
+                            </div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                              {formatTimeIST(pass.last_shared_at)}
+                            </div>
+                            {pass.reshare_count > 0 && (
+                              <div style={{ fontSize: '10px', color: '#2563EB', fontWeight: 700, marginTop: '2px' }}>
+                                Reshared {pass.reshare_count}×
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: 'var(--text-subtle)' }}>Not shared</span>
+                        )}
+                      </td>
+
+                      {/* 7. Scan Status */}
                       <td>
                         <Badge variant={
                           pass.status === 'active' ? 'success' :
@@ -476,53 +708,67 @@ export default function PassManagement() {
                         </Badge>
                       </td>
 
-                      <td>
-                        <div style={{ fontSize: '12.5px', color: 'var(--text-primary)' }}>
-                          {new Date(pass.valid_from).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – {new Date(pass.valid_until).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                        </div>
-                      </td>
-
+                      {/* 8. Scan Usage with Accurate IST Time */}
                       <td>
                         <div style={{ fontWeight: 800, fontSize: '13px' }}>
                           {pass.scan_count || 0} scans
                         </div>
-                        {pass.last_scanned_at && (
+                        {pass.last_scanned_at ? (
                           <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                            Last: {new Date(pass.last_scanned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            Last: <strong>{formatTimeIST(pass.last_scanned_at)}</strong>
+                            <div style={{ fontSize: '10px', color: 'var(--text-subtle)' }}>{formatDateIST(pass.last_scanned_at)}</div>
                           </div>
+                        ) : (
+                          <div style={{ fontSize: '11px', color: 'var(--text-subtle)' }}>Never scanned</div>
                         )}
                       </td>
 
+                      {/* 9. Print State */}
                       <td>
                         <Badge variant={pass.printed ? 'neutral' : 'warning'}>
                           {pass.printed ? 'PRINTED' : 'UNPRINTED'}
                         </Badge>
                       </td>
 
+                      {/* 10. Actions: View, Reshare, Renew, Void */}
                       <td style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', gap: '6px' }}>
+                        <div style={{ display: 'inline-flex', gap: '5px' }}>
                           <button
                             onClick={() => setActivePassDetailsId(pass.id)}
                             className="btn btn-outline btn-sm btn-icon"
-                            title="View Lifecycle Timeline"
+                            title="View Lifecycle Details & History"
                           >
                             <Eye size={14} />
                           </button>
+
                           <button
-                            onClick={() => setRenewTargetPass(pass)}
-                            className="btn btn-secondary btn-sm btn-icon"
-                            title="Renew Pass"
+                            onClick={() => setReshareTargetPass(pass)}
+                            className="btn btn-primary btn-sm btn-icon"
+                            title="Reshare Pass via Email/WhatsApp"
                           >
-                            <RotateCw size={14} />
+                            <Share2 size={14} />
                           </button>
-                          <button
-                            onClick={() => handleVoidPass(pass.id)}
-                            className="btn btn-outline btn-sm btn-icon"
-                            title="Void Pass"
-                            style={{ color: 'var(--danger-accent)' }}
-                          >
-                            <Ban size={14} />
-                          </button>
+
+                          {isSuperAdmin && (
+                            <>
+                              <button
+                                onClick={() => setRenewTargetPass(pass)}
+                                className="btn btn-secondary btn-sm btn-icon"
+                                title="Renew Pass"
+                              >
+                                <RotateCw size={14} />
+                              </button>
+
+                              <button
+                                onClick={() => handleVoidPass(pass.id)}
+                                className="btn btn-outline btn-sm btn-icon"
+                                title="Void Pass"
+                                style={{ color: 'var(--danger-accent)' }}
+                              >
+                                <Ban size={14} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -543,6 +789,50 @@ export default function PassManagement() {
           onPageSizeChange={(limit) => setPagination(prev => ({ ...prev, limit, page: 1 }))}
         />
       </div>
+
+      {/* Reshare Pass Modal */}
+      {reshareTargetPass && (
+        <ResharePassModal
+          pass={reshareTargetPass}
+          onClose={() => setReshareTargetPass(null)}
+          onSuccess={() => {
+            setReshareTargetPass(null);
+            fetchPasses(pagination.page);
+          }}
+        />
+      )}
+
+      {/* Pass Details Modal */}
+      {activePassDetailsId && (
+        <PassDetailsModal
+          passId={activePassDetailsId}
+          onClose={() => setActivePassDetailsId(null)}
+          onRenew={() => {
+            const p = passes.find(item => item.id === activePassDetailsId);
+            setActivePassDetailsId(null);
+            setRenewTargetPass(p);
+          }}
+          onVoid={() => {
+            handleVoidPass(activePassDetailsId);
+            setActivePassDetailsId(null);
+          }}
+          onReissue={() => {
+            setActivePassDetailsId(null);
+          }}
+        />
+      )}
+
+      {/* Individual Renew Pass Modal */}
+      {renewTargetPass && (
+        <RenewPassModal
+          pass={renewTargetPass}
+          onClose={() => setRenewTargetPass(null)}
+          onSuccess={() => {
+            setRenewTargetPass(null);
+            fetchPasses(pagination.page);
+          }}
+        />
+      )}
 
       {/* Generate Passes Modal */}
       <Modal
@@ -614,39 +904,6 @@ export default function PassManagement() {
           </div>
         </form>
       </Modal>
-
-      {/* Pass Details Modal */}
-      {activePassDetailsId && (
-        <PassDetailsModal
-          passId={activePassDetailsId}
-          onClose={() => setActivePassDetailsId(null)}
-          onRenew={() => {
-            const p = passes.find(item => item.id === activePassDetailsId);
-            setActivePassDetailsId(null);
-            setRenewTargetPass(p);
-          }}
-          onVoid={() => {
-            handleVoidPass(activePassDetailsId);
-            setActivePassDetailsId(null);
-          }}
-          onReissue={() => {
-            handleReissuePass(activePassDetailsId);
-            setActivePassDetailsId(null);
-          }}
-        />
-      )}
-
-      {/* Individual Renew Pass Modal */}
-      {renewTargetPass && (
-        <RenewPassModal
-          pass={renewTargetPass}
-          onClose={() => setRenewTargetPass(null)}
-          onSuccess={() => {
-            setRenewTargetPass(null);
-            fetchPasses(pagination.page);
-          }}
-        />
-      )}
 
       {/* Bulk Renew Modal */}
       {showBulkRenewModal && (

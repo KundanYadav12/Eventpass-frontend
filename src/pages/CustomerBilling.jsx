@@ -22,7 +22,9 @@ import {
   Building2,
   MessageCircle,
   HelpCircle,
-  Check
+  Check,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useEvent } from '../context/EventContext';
@@ -73,8 +75,16 @@ export default function CustomerBilling() {
   const [billPdfUrl, setBillPdfUrl] = useState(null);
   const [issuing, setIssuing] = useState(false);
 
-  // Success Result Modal
+  // Success Result & Delivery State
   const [issuedResult, setIssuedResult] = useState(null);
+  const [retrying, setRetrying] = useState(false);
+
+  // Issue Progress Tracking Modal State
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [progressStep, setProgressStep] = useState(1); // 1: Allocating, 2: Pass PDFs, 3: Invoice, 4: Dispatching, 5: Complete
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [progressStatusText, setProgressStatusText] = useState('');
+  const [progressError, setProgressError] = useState(null);
 
   // Convert Base64 strings to Blob URLs for high performance & unlimited size PDF rendering
   useEffect(() => {
@@ -249,8 +259,38 @@ export default function CustomerBilling() {
     }
   };
 
-  // 4. Final Confirm & Issue Passes
+  // 4. Final Confirm & Issue Passes with Live Multi-Step Progress UI
   const handleConfirmAndIssue = async () => {
+    setShowPreviewModal(false);
+    setShowProgressModal(true);
+    setProgressError(null);
+    setProgressStep(1);
+    setProgressPercent(15);
+    const qtyNum = parseInt(quantity, 10) || 1;
+    setProgressStatusText(`Step 1/4: Allocating and signing ${qtyNum} unique pass code(s) with HMAC-SHA256...`);
+
+    const timer1 = setTimeout(() => {
+      setProgressStep(2);
+      setProgressPercent(45);
+      setProgressStatusText(`Step 2/4: Generating ${qtyNum} styled Pass PDF(s) with scannable QR/barcodes...`);
+    }, 450);
+
+    const timer2 = setTimeout(() => {
+      setProgressStep(3);
+      setProgressPercent(75);
+      setProgressStatusText('Step 3/4: Generating itemized Tax Invoice Bill PDF...');
+    }, 950);
+
+    const timer3 = setTimeout(() => {
+      setProgressStep(4);
+      setProgressPercent(90);
+      setProgressStatusText(
+        sendVia === 'EMAIL' || sendVia === 'BOTH'
+          ? `Step 4/4: Attaching ${qtyNum} Pass PDF(s) & sending email to ${customerEmail || 'recipient'}...`
+          : (sendVia === 'WHATSAPP' ? 'Step 4/4: Generating secure WhatsApp delivery bundle...' : 'Step 4/4: Finalizing pass inventory & download bundle...')
+      );
+    }, 1500);
+
     setIssuing(true);
     try {
       const res = await api.post('/billing/issue-and-send', {
@@ -261,7 +301,7 @@ export default function CustomerBilling() {
         customerEmail: customerEmail.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         sponsorName: sponsorName.trim() || undefined,
-        quantity: parseInt(quantity, 10) || 1,
+        quantity: qtyNum,
         unitPrice: parseFloat(unitPrice) || 0,
         gstMode,
         gstRate,
@@ -272,25 +312,75 @@ export default function CustomerBilling() {
         emailSubject
       });
 
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+
       if (res.success) {
-        setShowPreviewModal(false);
-        setIssuedResult(res);
-        toast.success('Passes & Bill successfully issued!');
-        // Reset form
-        setCustomerName('');
-        setCustomerEmail('');
-        setCustomerPhone('');
-        setSponsorName('');
-        setQuantity(1);
+        setProgressStep(5);
+        setProgressPercent(100);
+        setProgressStatusText(`Complete! All ${res.passes?.length || qtyNum} passes generated and packaged successfully.`);
+
+        setTimeout(() => {
+          setShowProgressModal(false);
+          setIssuedResult(res);
+          toast.success(`Successfully issued ${res.passes?.length || qtyNum} pass(es)!`);
+          // Reset form fields
+          setCustomerName('');
+          setCustomerEmail('');
+          setCustomerPhone('');
+          setSponsorName('');
+          setQuantity(1);
+          if (activeTab === 'history') fetchHistory();
+        }, 650);
       }
     } catch (err) {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      setProgressError(err.message || 'Failed to issue passes');
       toast.error(err.message || 'Failed to issue passes');
     } finally {
       setIssuing(false);
     }
   };
 
+  // Retry failed delivery for issued billing record without re-creating passes
+  const handleRetryDelivery = async (billingId) => {
+    if (!billingId) return;
+    setRetrying(true);
+    try {
+      const res = await api.post(`/billing/${billingId}/resend-delivery`, {
+        sendVia: sendVia === 'NONE' ? 'EMAIL' : sendVia,
+        recipientEmail: customerEmail || undefined,
+        recipientPhone: customerPhone || undefined,
+        emailSubject
+      });
+
+      if (res.success) {
+        toast.success('Passes & Bill delivery re-sent successfully!');
+        if (issuedResult) {
+          setIssuedResult(prev => ({
+            ...prev,
+            emailSent: res.emailDelivery?.status === 'SENT',
+            emailDelivery: res.emailDelivery,
+            whatsappDelivery: res.whatsappDelivery,
+            whatsappUrl: res.whatsappUrl || prev?.whatsappUrl
+          }));
+        }
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to resend delivery');
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const handleDownloadPdf = (base64Data, filename) => {
+    if (!base64Data) {
+      toast.warning('PDF data not available for download');
+      return;
+    }
     const link = document.createElement('a');
     link.href = `data:application/pdf;base64,${base64Data}`;
     link.download = filename;
@@ -848,21 +938,87 @@ export default function CustomerBilling() {
         </Modal>
       )}
 
-      {/* Success Confirmation Modal with Downloads & WhatsApp Link */}
+      {/* Issue Progress Modal */}
+      <Modal
+        isOpen={showProgressModal}
+        onClose={() => {
+          if (!issuing) setShowProgressModal(false);
+        }}
+        title="⚡ Issuing & Packaging Passes..."
+        maxWidth="560px"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '12px 6px' }}>
+          {/* Progress Bar */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+              <span style={{ color: 'var(--primary-600)' }}>{progressStatusText}</span>
+              <span style={{ color: '#64748B' }}>{progressPercent}%</span>
+            </div>
+            <div style={{ width: '100%', height: '10px', backgroundColor: '#E2E8F0', borderRadius: '6px', overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${progressPercent}%`,
+                  backgroundColor: progressError ? '#EF4444' : (progressPercent === 100 ? '#10B981' : '#3B82F6'),
+                  transition: 'width 0.4s ease, background-color 0.3s ease'
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Step Progression Checklist */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', backgroundColor: '#F8FAFC', padding: '16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13.5px', color: progressStep > 1 ? '#047857' : (progressStep === 1 ? '#1D4ED8' : '#64748B'), fontWeight: progressStep === 1 ? 700 : 500 }}>
+              {progressStep > 1 ? <CheckCircle2 size={18} color="#10B981" /> : (progressStep === 1 ? <Loader2 size={18} className="spin" color="#3B82F6" /> : <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #CBD5E1' }} />)}
+              <span>1. Allocate & HMAC-Sign Security Pass Codes</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13.5px', color: progressStep > 2 ? '#047857' : (progressStep === 2 ? '#1D4ED8' : '#64748B'), fontWeight: progressStep === 2 ? 700 : 500 }}>
+              {progressStep > 2 ? <CheckCircle2 size={18} color="#10B981" /> : (progressStep === 2 ? <Loader2 size={18} className="spin" color="#3B82F6" /> : <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #CBD5E1' }} />)}
+              <span>2. Render All {quantity} Pass PDF(s) with QR / Barcodes</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13.5px', color: progressStep > 3 ? '#047857' : (progressStep === 3 ? '#1D4ED8' : '#64748B'), fontWeight: progressStep === 3 ? 700 : 500 }}>
+              {progressStep > 3 ? <CheckCircle2 size={18} color="#10B981" /> : (progressStep === 3 ? <Loader2 size={18} className="spin" color="#3B82F6" /> : <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #CBD5E1' }} />)}
+              <span>3. Generate Itemized Tax Invoice PDF</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13.5px', color: progressStep >= 4 ? (progressStep === 5 ? '#047857' : '#1D4ED8') : '#64748B', fontWeight: progressStep === 4 ? 700 : 500 }}>
+              {progressStep === 5 ? <CheckCircle2 size={18} color="#10B981" /> : (progressStep === 4 ? <Loader2 size={18} className="spin" color="#3B82F6" /> : <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #CBD5E1' }} />)}
+              <span>4. Package & Dispatch ({sendVia})</span>
+            </div>
+          </div>
+
+          {/* Error Message & Retry */}
+          {progressError && (
+            <div style={{ padding: '12px 16px', backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: '8px', color: '#991B1B', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={18} color="#DC2626" />
+                <span>{progressError}</span>
+              </div>
+              <button onClick={handleConfirmAndIssue} className="btn btn-sm btn-danger" style={{ minWidth: '80px' }}>
+                Retry
+              </button>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Success Confirmation Modal with Downloads & Success Rate */}
       {issuedResult && (
         <Modal
           isOpen={Boolean(issuedResult)}
           onClose={() => setIssuedResult(null)}
           title="🎉 Passes Successfully Issued & Generated!"
-          maxWidth="600px"
+          maxWidth="640px"
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'center', padding: '10px' }}>
-            <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#D1FAE5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-              <CheckCircle2 size={32} />
-            </div>
-
-            <div>
-              <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '0 0 6px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '10px' }}>
+            {/* Header Icon */}
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#D1FAE5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px auto' }}>
+                <CheckCircle2 size={32} />
+              </div>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, margin: '0 0 4px 0' }}>
                 Invoice {issuedResult.billing?.bill_number}
               </h3>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
@@ -870,40 +1026,119 @@ export default function CustomerBilling() {
               </p>
             </div>
 
-            {/* Pass Codes Box */}
-            <div style={{ backgroundColor: '#F8FAFC', padding: '12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-              <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', marginBottom: '6px' }}>GENERATED PASS CODES:</div>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                {issuedResult.passes?.map(p => (
-                  <span
-                    key={p.code}
-                    style={{
-                      backgroundColor: '#EFF6FF',
-                      color: '#1D4ED8',
-                      fontFamily: 'monospace',
-                      fontWeight: 800,
-                      fontSize: '14px',
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      border: '1px solid #BFDBFE'
-                    }}
-                  >
-                    {p.code}
-                  </span>
-                ))}
+            {/* Success Rate & Delivery Status Summary Banner */}
+            <div
+              style={{
+                backgroundColor: issuedResult.emailSent || sendVia === 'NONE' || sendVia === 'WHATSAPP' ? '#ECFDF5' : '#FFFBEB',
+                border: `1px solid ${issuedResult.emailSent || sendVia === 'NONE' || sendVia === 'WHATSAPP' ? '#A7F3D0' : '#FDE68A'}`,
+                borderRadius: '8px',
+                padding: '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '10px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {issuedResult.emailSent || sendVia === 'NONE' || sendVia === 'WHATSAPP' ? (
+                  <CheckCircle2 size={20} color="#059669" />
+                ) : (
+                  <AlertTriangle size={20} color="#D97706" />
+                )}
+                <div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#0F172A' }}>
+                    {issuedResult.passes?.length} / {issuedResult.passes?.length} passes generated and packaged successfully.
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
+                    {(sendVia === 'EMAIL' || sendVia === 'BOTH') && (
+                      issuedResult.emailSent
+                        ? `✓ Email delivered to ${issuedResult.billing?.customer_email} (${issuedResult.passes?.length} Pass PDF attachments + 1 Invoice)`
+                        : `⚠️ Email delivery pending/failed: ${issuedResult.emailDelivery?.error || 'Check SMTP configuration'}`
+                    )}
+                    {sendVia === 'WHATSAPP' && `✓ WhatsApp confirmation link prepared for ${issuedResult.billing?.customer_phone || 'recipient'}`}
+                    {sendVia === 'NONE' && '✓ Ready for instant on-demand download.'}
+                  </div>
+                </div>
+              </div>
+
+              {(!issuedResult.emailSent && (sendVia === 'EMAIL' || sendVia === 'BOTH')) && (
+                <button
+                  onClick={() => handleRetryDelivery(issuedResult.billing?.id)}
+                  className="btn btn-sm btn-outline"
+                  disabled={retrying}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}
+                >
+                  <RefreshCw size={13} className={retrying ? 'spin' : ''} />
+                  <span>{retrying ? 'Retrying...' : 'Retry Delivery'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Pass Codes Box with Individual Download Badges */}
+            <div style={{ backgroundColor: '#F8FAFC', padding: '14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#64748B', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>GENERATED PASS CODES ({issuedResult.passes?.length}):</span>
+                <span style={{ fontSize: '11px', color: '#94A3B8' }}>Click any pass chip to download individually</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {issuedResult.passes?.map((p, idx) => {
+                  const passItem = issuedResult.passPdfs?.find(pdf => pdf.code === p.code);
+                  return (
+                    <button
+                      key={p.code}
+                      type="button"
+                      onClick={() => {
+                        if (passItem?.base64) {
+                          handleDownloadPdf(passItem.base64, `Pass_${p.code}.pdf`);
+                        } else {
+                          handleDownloadPdf(issuedResult.passPdfBase64, `Pass_${p.code}.pdf`);
+                        }
+                      }}
+                      title={`Download Pass ${p.code}`}
+                      style={{
+                        backgroundColor: '#EFF6FF',
+                        color: '#1D4ED8',
+                        fontFamily: 'monospace',
+                        fontWeight: 800,
+                        fontSize: '13.5px',
+                        padding: '5px 12px',
+                        borderRadius: '6px',
+                        border: '1px solid #BFDBFE',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s'
+                      }}
+                    >
+                      <span>{p.code}</span>
+                      <Download size={13} color="#2563EB" />
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Action Buttons: Download PDF & WhatsApp */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+            {/* Action Buttons: Bundle Download, Bill PDF & WhatsApp */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <button
-                  onClick={() => handleDownloadPdf(issuedResult.passPdfBase64, `Pass_${issuedResult.passes[0]?.code}.pdf`)}
-                  className="btn btn-secondary"
+                  onClick={() => {
+                    const fname = (issuedResult.passes?.length || 1) > 1
+                      ? `Passes_${issuedResult.billing?.bill_number}.pdf`
+                      : `Pass_${issuedResult.passes[0]?.code}.pdf`;
+                    handleDownloadPdf(issuedResult.passPdfBase64, fname);
+                  }}
+                  className="btn btn-primary"
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                 >
                   <Download size={16} />
-                  <span>Download Pass PDF</span>
+                  <span>
+                    {(issuedResult.passes?.length || 1) > 1
+                      ? `Download All ${issuedResult.passes?.length} Passes (PDF)`
+                      : 'Download Pass PDF'}
+                  </span>
                 </button>
 
                 <button
@@ -922,7 +1157,14 @@ export default function CustomerBilling() {
                   target="_blank"
                   rel="noreferrer"
                   className="btn btn-primary"
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', backgroundColor: '#10B981', borderColor: '#10B981' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    backgroundColor: '#10B981',
+                    borderColor: '#10B981'
+                  }}
                 >
                   <MessageCircle size={18} />
                   <span>Share Confirmation via WhatsApp</span>
@@ -930,7 +1172,7 @@ export default function CustomerBilling() {
               )}
             </div>
 
-            <button onClick={() => setIssuedResult(null)} className="btn btn-outline" style={{ marginTop: '6px' }}>
+            <button onClick={() => setIssuedResult(null)} className="btn btn-outline" style={{ marginTop: '4px' }}>
               Done / Create Another Bill
             </button>
           </div>

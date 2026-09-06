@@ -173,30 +173,47 @@ export default function PassStyles() {
                 </div>
 
                 {/* Mini Preview Box */}
-                <div style={{
-                  height: '160px',
-                  borderRadius: '8px',
-                  backgroundColor: '#090D16',
-                  backgroundImage: s.background_image_url ? `url(${s.background_image_url})` : 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #090D16 100%)',
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '12px',
-                  color: '#FFFFFF',
-                  textAlign: 'center',
-                  border: '1px solid rgba(255,255,255,0.1)'
-                }}>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#60A5FA' }}>
-                    {s.name}
-                  </div>
-                  <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(255,255,255,0.9)', padding: '4px 8px', borderRadius: '4px' }}>
-                    <Barcode size={24} color="#000000" />
-                    <span style={{ fontSize: '10px', color: '#000000', fontWeight: 700, fontFamily: 'monospace' }}>55KDBD2</span>
-                  </div>
-                </div>
+                {(() => {
+                  const isQr = Array.isArray(s.elements_config) && s.elements_config.some(el =>
+                    el.type === 'qrcode' ||
+                    String(el.barcode_format || el.barcodeFormat || '').toUpperCase().includes('QR')
+                  );
+                  return (
+                    <div style={{
+                      height: '160px',
+                      borderRadius: '8px',
+                      backgroundColor: '#090D16',
+                      backgroundImage: s.background_image_url ? `url(${s.background_image_url})` : 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #090D16 100%)',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '12px',
+                      color: '#FFFFFF',
+                      textAlign: 'center',
+                      border: '1px solid rgba(255,255,255,0.1)'
+                    }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#60A5FA' }}>
+                        {s.name}
+                      </div>
+                      <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'rgba(255,255,255,0.9)', padding: '4px 8px', borderRadius: '4px' }}>
+                        {isQr ? (
+                          <>
+                            <QrCode size={20} color="#000000" />
+                            <span style={{ fontSize: '10px', color: '#000000', fontWeight: 700, fontFamily: 'monospace' }}>55KDBD2 (QR)</span>
+                          </>
+                        ) : (
+                          <>
+                            <Barcode size={24} color="#000000" />
+                            <span style={{ fontSize: '10px', color: '#000000', fontWeight: 700, fontFamily: 'monospace' }}>55KDBD2</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Specs / Meta */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>

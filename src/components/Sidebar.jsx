@@ -7,6 +7,7 @@ import {
   Tags,
   Palette,
   CreditCard,
+  TrendingUp,
   Send,
   Printer,
   History,
@@ -26,6 +27,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
   const canViewPassStyles = isSuperAdmin || hasPermission('pass_styles.view') || hasPermission('pass_styles.use');
   const canBilling = isSuperAdmin || hasPermission('billing.create') || hasPermission('passes.generate');
+  const canViewSales = isSuperAdmin || hasPermission('sales.view') || hasPermission('billing.create');
 
   const navItems = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -34,6 +36,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { to: '/categories', label: 'Pass Categories', icon: Tags },
     ...(canViewPassStyles ? [{ to: '/pass-styles', label: 'Pass Styles', icon: Palette }] : []),
     ...(canBilling ? [{ to: '/billing', label: 'Billing & Issue', icon: CreditCard }] : []),
+    ...(canViewSales ? [{ to: '/sales', label: 'Sales Report', icon: TrendingUp }] : []),
     { to: '/delivery-settings', label: 'Email & WhatsApp', icon: Send },
     ...(isSuperAdmin ? [{ to: '/print-batches', label: 'Print Batches', icon: Printer }] : []),
     { to: '/scan-history', label: 'Scan History', icon: History },

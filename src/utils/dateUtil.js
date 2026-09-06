@@ -1,8 +1,8 @@
 /**
  * Indian Standard Time (IST - Asia/Kolkata, UTC+5:30) Date & Time Utilities
  * 
- * Guarantees that all timestamps across the admin dashboard, modals, inputs, and tables
- * are formatted consistently in IST regardless of user browser or server timezone.
+ * Guarantees that all timestamps across the admin dashboard, modals, inputs, tables,
+ * scan usage, and sales reports are formatted consistently in IST regardless of user browser or server timezone.
  */
 
 export const IST_TIMEZONE = 'Asia/Kolkata';
@@ -62,27 +62,39 @@ export function istDatetimeLocalToUTC(datetimeLocalStr) {
   const minute = parseInt(match[5] || '0', 10);
   const second = parseInt(match[6] || '0', 10);
 
-  // Input was in IST (+5:30) -> subtract 5h 30m to get UTC epoch
   const utcMs = Date.UTC(year, month, day, hour, minute, second) - IST_OFFSET_MS;
   return new Date(utcMs).toISOString();
 }
 
 /**
- * Format date in IST: "2 Oct 2026"
+ * Format date in IST: "04 Sep 2026"
  */
 export function formatDateIST(dateInput) {
   const d = parseDate(dateInput);
   if (!d || isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-GB', {
     timeZone: IST_TIMEZONE,
-    day: 'numeric',
+    day: '2-digit',
     month: 'short',
     year: 'numeric'
   });
 }
 
 /**
- * Format time in IST: "08:30 PM"
+ * Format short date in IST: "04 Sep"
+ */
+export function formatShortDateIST(dateInput) {
+  const d = parseDate(dateInput);
+  if (!d || isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('en-GB', {
+    timeZone: IST_TIMEZONE,
+    day: '2-digit',
+    month: 'short'
+  });
+}
+
+/**
+ * Format time in IST: "10:50 PM"
  */
 export function formatTimeIST(dateInput) {
   const d = parseDate(dateInput);
@@ -97,7 +109,7 @@ export function formatTimeIST(dateInput) {
 }
 
 /**
- * Format time with seconds in IST: "08:30:15 PM"
+ * Format time with seconds in IST: "10:50:23 PM"
  */
 export function formatTimeWithSecondsIST(dateInput) {
   const d = parseDate(dateInput);
@@ -113,14 +125,14 @@ export function formatTimeWithSecondsIST(dateInput) {
 }
 
 /**
- * Format date & time in IST: "2 Oct 2026, 08:30 PM"
+ * Format date & time in IST: "04 Sep 2026, 10:50 PM"
  */
 export function formatDateTimeIST(dateInput) {
   const d = parseDate(dateInput);
   if (!d || isNaN(d.getTime())) return '—';
   const str = d.toLocaleString('en-GB', {
     timeZone: IST_TIMEZONE,
-    day: 'numeric',
+    day: '2-digit',
     month: 'short',
     year: 'numeric',
     hour: '2-digit',
@@ -142,6 +154,19 @@ export function formatClockTime(clockStr) {
   h = h % 12;
   h = h ? h : 12;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+/**
+ * Returns "YYYY-MM-DD" representing the current or given date in IST
+ */
+export function getISTDateString(dateInput = new Date()) {
+  const d = parseDate(dateInput);
+  if (!d || isNaN(d.getTime())) return '';
+  const istDate = new Date(d.getTime() + IST_OFFSET_MS);
+  const year = istDate.getUTCFullYear();
+  const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(istDate.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**

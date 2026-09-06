@@ -23,7 +23,7 @@ import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useEvent } from '../context/EventContext';
 import Badge from '../components/Badge';
-import { formatTimeWithSecondsIST } from '../utils/dateUtil';
+import { formatTimeWithSecondsIST, formatDateIST } from '../utils/dateUtil';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -106,7 +106,7 @@ export default function Dashboard() {
             </h1>
             <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
               {currentEvent
-                ? `Operational dates: ${new Date(currentEvent.event_start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${new Date(currentEvent.event_end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} • Active Gate Authority`
+                ? `Operational dates: ${formatDateIST(currentEvent.event_start_date)} – ${formatDateIST(currentEvent.event_end_date)} • Active Gate Authority`
                 : 'Aggregating real-time pass inventory, admissions, and gate scanners across all events'}
             </p>
           </div>

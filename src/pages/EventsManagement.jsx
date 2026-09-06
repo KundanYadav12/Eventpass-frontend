@@ -348,7 +348,7 @@ export default function EventsManagement() {
 
                       <td>
                         <div style={{ fontSize: '13px', fontWeight: 600 }}>
-                          {new Date(ev.event_start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} – {new Date(ev.event_end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          {formatDateIST(ev.event_start_date)} – {formatDateIST(ev.event_end_date)}
                         </div>
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
                           <MapPin size={12} />

@@ -46,7 +46,16 @@ export async function apiRequest(endpoint, options = {}) {
       window.location.href = '/login';
     }
 
-    const data = await response.json();
+    let data = {};
+    const text = await response.text();
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        data = { success: response.ok, message: text };
+      }
+    }
+
     if (!response.ok && !data.result) {
       throw new Error(data.message || `Request failed with status ${response.status}`);
     }
