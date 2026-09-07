@@ -102,7 +102,7 @@ export default function PrintBatches() {
   const fetchBatches = async () => {
     setLoading(true);
     try {
-      const url = selectedEvent ? `/print/batches?eventId=${selectedEvent.id}` : '/print/batches';
+      const url = selectedEvent ? `/print/batches?eventId=${selectedEvent.id}&limit=500` : '/print/batches?limit=500';
       const res = await api.get(url);
       if (res.success) {
         setBatches(res.batches);
