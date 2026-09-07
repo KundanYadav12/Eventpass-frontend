@@ -166,6 +166,24 @@ export default function PrintBatches() {
     }
   }, [selectedPrinter]);
 
+  const dispatchToLocalGateway = async (rawData, docTitle = 'EventGen_Web_Print_Job') => {
+    if (!rawData) return;
+    try {
+      await fetch('http://localhost:4173/api/local/hardware/print-raw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerName: selectedPrinter,
+          rawData,
+          docTitle
+        })
+      });
+    } catch (gatewayErr) {
+      // Electron print engine not open or port 4173 silent fallback
+      console.debug('Local print engine gateway not reached on 4173:', gatewayErr.message);
+    }
+  };
+
   const [testingBarcode, setTestingBarcode] = useState(false);
 
   const handleTestBarcode = async () => {
@@ -177,6 +195,9 @@ export default function PrintBatches() {
         pattern: barcodePattern
       });
       if (res.success) {
+        if (res.tsplSent) {
+          await dispatchToLocalGateway(res.tsplSent, `Physical_Test_${barcodePattern}`);
+        }
         setLastDispatchedLog({
           title: `Physical Label Test (${res.barcodeType}: ${res.barcodeValue})`,
           printer: res.printerName,
@@ -201,6 +222,9 @@ export default function PrintBatches() {
     try {
       const res = await api.post('/print/calibrate', { printerName: selectedPrinter });
       if (res.success) {
+        if (res.tsplSent) {
+          await dispatchToLocalGateway(res.tsplSent, 'Gap_Calibration');
+        }
         toast.info(res.message);
         setLastDispatchedLog({
           title: 'Media Gap Calibration (GAP-DETECT)',
@@ -225,6 +249,9 @@ export default function PrintBatches() {
     try {
       const res = await api.post('/print/unpause', { printerName: selectedPrinter });
       if (res.success) {
+        if (res.tsplSent) {
+          await dispatchToLocalGateway(res.tsplSent, 'Unpause_Command');
+        }
         toast.success(res.message);
         setLastDispatchedLog({
           title: 'Unpause / Resume Command',
@@ -301,6 +328,10 @@ export default function PrintBatches() {
         printerName: selectedPrinter
       });
       if (res.success) {
+        const rawPayload = res.data?.rawPayload || res.data?.tsplData;
+        if (rawPayload) {
+          await dispatchToLocalGateway(rawPayload, `Batch_${batchId}_Chunk_${res.data.printedNow}`);
+        }
         toast.success(`Printed chunk: ${res.data.printedNow} labels (Total: ${res.data.totalPrinted})`);
         if (res.data.tsplData) {
           setLastDispatchedLog({
